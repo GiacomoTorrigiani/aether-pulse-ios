@@ -39,6 +39,8 @@ dependencies:
   audioplayers: ^6.7.1
   url_launcher: ^6.3.3
   path_provider: ^2.1.6
+  flutter_contacts: ^2.1.0
+  speech_to_text: ^7.4.0
 
 dev_dependencies:
   flutter_test:

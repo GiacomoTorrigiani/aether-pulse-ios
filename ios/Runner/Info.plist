@@ -17,9 +17,11 @@
 		<string>audio</string>
 	</array>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>VoxMind richiede l&apos;accesso al microfono per analizzare la voce durante le chiamate.</string>
+	<string>VoxMind richiede l&apos;accesso al microfono per registrare le conversazioni.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>VoxMind richiede il riconoscimento vocale per trascrivere le conversazioni.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Telefono AI richiede l&apos;accesso alla rubrica per visualizzare e chiamare i tuoi contatti.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
