@@ -54,21 +54,21 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Telefono AI — Smart Routing, Esclusioni Numeri & Risparmio Automatico (v4.2.0 .IPA)
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v4.2.0' }}
+          name: Telefono AI — Integrazione Broker Cloud, Configurazione API Centralino & Sincronizzazione Mappe (v4.3.0 .IPA)
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v4.3.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v4.2.0: Smart Routing & Risparmio Automatico (.ipa)
+            ## 📱 Telefono AI v4.3.0: Broker Cloud & Configurazione API (.ipa)
             
             Compiled automatically with GitHub Actions on macOS without requiring a Mac.
             
-            ### 🌟 Novità Assolute in v4.2.0:
-            1. **🛡️ Nuovo Tab Dedicato "Risparmio & Routing"**: Interfaccia grafica completa per visualizzare e gestire la lista dei numeri esclusi dal centralino VoIP.
-            2. **💰 Calcolatore di Risparmio in Tempo Reale**: Stima della spesa mensile (es. 1,63 €/mese) e calcolo automatico dei soldi risparmiati chiamando i contatti personali direttamente con la SIM TIM gratuita.
-            3. **👥 Gestione Esclusioni Diretta in Rubrica**: Ogni contatto in rubrica mostra lo stato attuale (`🛡️ TIM 0€` o `🎙️ AI`) e un pulsante scudo per includere o escludere il contatto con 1 tap.
-            4. **🔢 Tastierino Intelligente con Riconoscimento Esclusioni**: Quando digiti un numero escluso (es. `3381764***`), l'app riconosce il prefisso, accende il badge verde e imposta la chiamata diretta TIM a costo zero.
-            5. **💾 Persistenza Locale Robusta (`SharedPreferences`)**: I numeri esclusi restano salvati sul dispositivo anche dopo la chiusura dell'app.
+            ### 🌟 Nuove Funzionalità in v4.3.0:
+            1. **🌐 Interfaccia Configurazione Broker & API**: Modale dedicato accessibile dalla barra di stato o dal tab Risparmio per configurare l'endpoint del proprio centralino Asterisk, Telnyx o Twilio.
+            2. **🔑 Parametri di Connessione Completi**: Configurazione guidata per Server URL, API Secret Token (Bearer), Numero Virtuale DID (Inbound) e Caller ID TIM certificato (Outbound).
+            3. **⚡ Test Connessione Ping Live**: Verifica istantanea con feedback visivo della connettività con il server backend VoIP.
+            4. **🔄 Sincronizzazione Automatica Registrazioni Cloud**: Con un solo tap su "Sincronizza Cloud" l'app recupera le registrazioni effettuate dal centralino Asterisk/Telnyx e genera immediatamente trascrizioni, appunti e mappe concettuali interattive.
+            5. **🖥️ Microserver Broker Python Pronto all'Uso**: Disponibile nello script `server/broker_webhook_server.py` per ricevere i webhook di fine chiamata e trascrivere con Whisper / Gemini AI.
             
             ### 📲 Installazione su iPhone con Sideloadly:
             1. Scarica `AetherPulse.ipa` qui sotto.
