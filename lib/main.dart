@@ -128,11 +128,11 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
   final Map<String, String> _excludedNames = {};
 
   // External Broker / PBX API State
-  String _brokerUrl = 'https://api.telnyx.com/v2';
-  String _brokerApiKey = '';
+  String _brokerUrl = 'https://gestoreserver.duckdns.org/telefono';
+  String _brokerApiKey = 'segreto_telefono_ai_2026';
   String _brokerDid = '+39021234567';
   String _brokerCallerId = '+393381234567';
-  String _brokerProvider = 'Asterisk / Telnyx PBX';
+  String _brokerProvider = 'Asterisk VPS (gestoreserver.duckdns.org)';
   bool _isBrokerConnected = false;
   bool _isTestingBroker = false;
   bool _isSyncingBroker = false;
@@ -254,11 +254,11 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
   Future<void> _loadBrokerSettings() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _brokerUrl = prefs.getString('broker_url') ?? 'https://api.telnyx.com/v2';
-      _brokerApiKey = prefs.getString('broker_api_key') ?? '';
+      _brokerUrl = prefs.getString('broker_url') ?? 'https://gestoreserver.duckdns.org/telefono';
+      _brokerApiKey = prefs.getString('broker_api_key') ?? 'segreto_telefono_ai_2026';
       _brokerDid = prefs.getString('broker_did') ?? '+39021234567';
       _brokerCallerId = prefs.getString('broker_caller_id') ?? '+393381234567';
-      _brokerProvider = prefs.getString('broker_provider') ?? 'Asterisk / Telnyx PBX';
+      _brokerProvider = prefs.getString('broker_provider') ?? 'Asterisk VPS (gestoreserver.duckdns.org)';
       _isBrokerConnected = prefs.getBool('broker_connected') ?? false;
     });
   }
