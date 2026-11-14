@@ -54,23 +54,27 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Aether Pulse iOS (v1.0.0 .IPA)
-          tag_name: v1.0.0
+          name: Synapse Kinetic Life OS (v2.0.0 .IPA)
+          tag_name: v2.0.0
           draft: false
           prerelease: false
           body: |
-            ## 🌟 Aether Pulse - iOS Release (.ipa)
+            ## 🌟 Synapse: Kinetic Life OS - iOS Release (.ipa)
             
             Compiled automatically with GitHub Actions on macOS without requiring a local Mac.
             
-            ### 📱 How to Install on iPhone:
+            ### 📱 What makes Synapse unique:
+            - **Orbital Reality Matrix**: Your day is a kinetic solar system governed by real orbital mechanics.
+            - **Supernova Dopamine Absorption**: Complete tasks by absorbing them with an explosive particle burst and haptic feedback.
+            - **120s Neural Ignition**: Destroy task inertia with the neuroscience-backed 2-minute friction breaker.
+            - **Circadian Bio-Battery**: Real-time 24h biological capacity telemetry.
+            - **Kinetic Thought Void**: Elastic memory bubbles bouncing in an antigravity chamber.
+            
+            ### 📲 How to Install on iPhone:
             1. Download `AetherPulse.ipa` below.
-            2. Sideload it using any of the following tools:
-               - **Sideloadly** (Windows/Mac, free)
-               - **AltStore** (free)
-               - **TrollStore** (iOS 14-17.0)
-               - **Scarlet / Feather / Esign**
-            3. Enjoy full 120Hz neural soundscapes, sacred breathwork, and circadian chrono-intelligence on your iPhone!
+            2. Sideload with Sideloadly (Windows/Mac, free) or AltStore.
+            3. On iPhone: Settings > General > VPN & Device Management > Trust.
+            4. Enjoy 120 FPS kinetic physics on your iPhone!
           files: |
             AetherPulse.ipa
         env:
