@@ -17,180 +17,257 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  runApp(const AetherPulseApp());
+  runApp(const SynapseLifeOSApp());
 }
 
-class AetherPulseApp extends StatelessWidget {
-  const AetherPulseApp({super.key});
+class SynapseLifeOSApp extends StatelessWidget {
+  const SynapseLifeOSApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Aether Pulse',
+      title: 'Synapse: Kinetic Life OS',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF080B10),
+        scaffoldBackgroundColor: const Color(0xFF030508),
         colorScheme: const ColorScheme.dark(
           primary: Color(0xFF00F5D4),
-          secondary: Color(0xFF7B2CBF),
-          surface: Color(0xFF111622),
+          secondary: Color(0xFF7928CA),
+          surface: Color(0xFF0C1018),
         ),
       ),
-      home: const MainNavigationScreen(),
+      home: const SynapseMainScreen(),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// MODELS & DATA
+// GLOBAL STATE & DATA MODELS
 // ---------------------------------------------------------------------------
 
-enum BrainwaveType { delta, theta, alpha, beta, gamma }
+enum NodeCategory { deepWork, bioHealth, microHabit, breakthrough }
 
-class BrainwaveData {
-  final BrainwaveType type;
-  final String name;
-  final String targetHz;
-  final String state;
-  final String description;
-  final Color primaryColor;
-  final Color secondaryColor;
-  final double frequency;
+class OrbitalNode {
+  final String id;
+  String title;
+  NodeCategory category;
+  double orbitRadius; // Distance from central sun
+  double angle; // Current orbital angle in radians
+  double speed; // Orbital velocity
+  double mass; // Size and gravitational weight
+  Color glowColor;
+  bool isCompleted;
+  int xpValue;
 
-  const BrainwaveData({
-    required this.type,
-    required this.name,
-    required this.targetHz,
-    required this.state,
-    required this.description,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.frequency,
+  OrbitalNode({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.orbitRadius,
+    required this.angle,
+    required this.speed,
+    required this.mass,
+    required this.glowColor,
+    this.isCompleted = false,
+    required this.xpValue,
   });
 }
 
-const List<BrainwaveData> brainwaveModes = [
-  BrainwaveData(
-    type: BrainwaveType.delta,
-    name: 'Delta',
-    targetHz: '2.5 Hz',
-    state: 'Deep Sleep & Healing',
-    description: 'Immune restoration, growth hormone release and cellular repair.',
-    primaryColor: Color(0xFF7209B7),
-    secondaryColor: Color(0xFF3F37C9),
-    frequency: 2.5,
-  ),
-  BrainwaveData(
-    type: BrainwaveType.theta,
-    name: 'Theta',
-    targetHz: '6.0 Hz',
-    state: 'REM & Deep Meditation',
-    description: 'Enhanced intuitive insight, memory consolidation & lucid clarity.',
-    primaryColor: Color(0xFF00F5D4),
-    secondaryColor: Color(0xFF00BBF9),
-    frequency: 6.0,
-  ),
-  BrainwaveData(
-    type: BrainwaveType.alpha,
-    name: 'Alpha',
-    targetHz: '10.0 Hz',
-    state: 'Superlearning & Flow',
-    description: 'Relaxed alertness, anxiety dissolution and cognitive agility.',
-    primaryColor: Color(0xFF52B788),
-    secondaryColor: Color(0xFF2D6A4F),
-    frequency: 10.0,
-  ),
-  BrainwaveData(
-    type: BrainwaveType.beta,
-    name: 'Beta',
-    targetHz: '18.0 Hz',
-    state: 'Sharp Cognitive Focus',
-    description: 'Analytical execution, dynamic problem-solving & executive work.',
-    primaryColor: Color(0xFFFF9E00),
-    secondaryColor: Color(0xFFFF5400),
-    frequency: 18.0,
-  ),
-  BrainwaveData(
-    type: BrainwaveType.gamma,
-    name: 'Gamma',
-    targetHz: '40.0 Hz',
-    state: 'Peak Synchrony',
-    description: 'Simultaneous multi-sensory synthesis & high-voltage awareness.',
-    primaryColor: Color(0xFFF72585),
-    secondaryColor: Color(0xFFB5179E),
-    frequency: 40.0,
-  ),
-];
+class ThoughtBubble {
+  final String id;
+  String text;
+  double x;
+  double y;
+  double vx;
+  double vy;
+  double radius;
+  Color color;
 
-// ---------------------------------------------------------------------------
-// MAIN NAVIGATION WRAPPER (Custom Frosted iOS Dock)
-// ---------------------------------------------------------------------------
-
-class MainNavigationScreen extends StatefulWidget {
-  const MainNavigationScreen({super.key});
-
-  @override
-  State<MainNavigationScreen> createState() => _MainNavigationScreenState();
+  ThoughtBubble({
+    required this.id,
+    required this.text,
+    required this.x,
+    required this.y,
+    required this.vx,
+    required this.vy,
+    required this.radius,
+    required this.color,
+  });
 }
 
-class _MainNavigationScreenState extends State<MainNavigationScreen> {
-  int _currentIndex = 0;
+// ---------------------------------------------------------------------------
+// MAIN CONTAINER & FLOATING CYBER HUD
+// ---------------------------------------------------------------------------
 
-  final List<Widget> _pages = const [
-    NeuralResonanceScreen(),
-    ParticleUniverseScreen(),
-    SacredBreathingScreen(),
-    CircadianClockScreen(),
-    QuantumFlowScreen(),
+class SynapseMainScreen extends StatefulWidget {
+  const SynapseMainScreen({super.key});
+
+  @override
+  State<SynapseMainScreen> createState() => _SynapseMainScreenState();
+}
+
+class _SynapseMainScreenState extends State<SynapseMainScreen> {
+  int _currentTabIndex = 0;
+  int _userXp = 480;
+  int _userLevel = 3;
+  final int _streakDays = 12;
+
+  // Active Orbital Nodes
+  final List<OrbitalNode> _nodes = [
+    OrbitalNode(
+      id: '1',
+      title: 'Deep Coding Sprint',
+      category: NodeCategory.deepWork,
+      orbitRadius: 105,
+      angle: 0.4,
+      speed: 0.008,
+      mass: 26,
+      glowColor: const Color(0xFF00F5D4),
+      xpValue: 150,
+    ),
+    OrbitalNode(
+      id: '2',
+      title: 'Cold Hydration 1L',
+      category: NodeCategory.bioHealth,
+      orbitRadius: 145,
+      angle: 2.1,
+      speed: 0.006,
+      mass: 18,
+      glowColor: const Color(0xFF00BBF9),
+      xpValue: 50,
+    ),
+    OrbitalNode(
+      id: '3',
+      title: 'Architect Breakthrough',
+      category: NodeCategory.breakthrough,
+      orbitRadius: 185,
+      angle: 4.2,
+      speed: 0.004,
+      mass: 32,
+      glowColor: const Color(0xFFFF0080),
+      xpValue: 250,
+    ),
+    OrbitalNode(
+      id: '4',
+      title: 'Micro Meditation 5m',
+      category: NodeCategory.microHabit,
+      orbitRadius: 75,
+      angle: 1.2,
+      speed: 0.012,
+      mass: 16,
+      glowColor: const Color(0xFFFFB703),
+      xpValue: 80,
+    ),
+    OrbitalNode(
+      id: '5',
+      title: 'Evening Zero-Light',
+      category: NodeCategory.bioHealth,
+      orbitRadius: 160,
+      angle: 5.5,
+      speed: 0.005,
+      mass: 20,
+      glowColor: const Color(0xFF7928CA),
+      xpValue: 100,
+    ),
   ];
+
+  void _addXp(int amount) {
+    setState(() {
+      _userXp += amount;
+      if (_userXp >= _userLevel * 300) {
+        _userLevel++;
+        HapticFeedback.heavyImpact();
+      }
+    });
+  }
+
+  void _completeNode(String id) {
+    final idx = _nodes.indexWhere((n) => n.id == id);
+    if (idx != -1 && !_nodes[idx].isCompleted) {
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _nodes[idx].isCompleted = true;
+        _addXp(_nodes[idx].xpValue);
+      });
+    }
+  }
+
+  void _addNewNode(String title, NodeCategory category, double urgency) {
+    Color color;
+    switch (category) {
+      case NodeCategory.deepWork:
+        color = const Color(0xFF00F5D4);
+        break;
+      case NodeCategory.bioHealth:
+        color = const Color(0xFF00BBF9);
+        break;
+      case NodeCategory.breakthrough:
+        color = const Color(0xFFFF0080);
+        break;
+      case NodeCategory.microHabit:
+        color = const Color(0xFFFFB703);
+        break;
+    }
+
+    final rand = math.Random();
+    setState(() {
+      _nodes.add(
+        OrbitalNode(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          title: title,
+          category: category,
+          orbitRadius: 80 + (1.0 - urgency) * 110,
+          angle: rand.nextDouble() * 2 * math.pi,
+          speed: 0.005 + rand.nextDouble() * 0.007,
+          mass: 16 + (urgency * 14),
+          glowColor: color,
+          xpValue: (100 * urgency).toInt() + 50,
+        ),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          // Background ambient gradient flare
-          Positioned(
-            top: -100,
-            left: -100,
+          // Background Cosmic Dust & Ambient Bioluminescence
+          Positioned.fill(
             child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
+              decoration: const BoxDecoration(
                 gradient: RadialGradient(
+                  center: Alignment(0, -0.2),
+                  radius: 1.2,
                   colors: [
-                    const Color(0xFF00F5D4).withAlpha(35),
-                    Colors.transparent,
+                    Color(0xFF0C1425),
+                    Color(0xFF04060A),
                   ],
                 ),
               ),
             ),
           ),
-          Positioned(
-            bottom: -50,
-            right: -50,
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF7B2CBF).withAlpha(45),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Active Screen
+
+          // Main Pages
           IndexedStack(
-            index: _currentIndex,
-            children: _pages,
+            index: _currentTabIndex,
+            children: [
+              OrbitalRealityTab(
+                nodes: _nodes,
+                onCompleteNode: _completeNode,
+                onAddNode: _openAddNodeSheet,
+                userXp: _userXp,
+                userLevel: _userLevel,
+                streakDays: _streakDays,
+              ),
+              const NeuralIgnitionTab(),
+              const BioBatteryTab(),
+              const ThoughtVoidTab(),
+            ],
           ),
-          // Floating iOS Bottom Glass Dock
+
+          // Floating Glass Capsule Navigation Bar
           Positioned(
             bottom: 24,
             left: 20,
@@ -206,16 +283,13 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return Container(
       height: 72,
       decoration: BoxDecoration(
-        color: const Color(0xFF10141E).withAlpha(220),
+        color: const Color(0xFF080D16).withAlpha(225),
         borderRadius: BorderRadius.circular(36),
-        border: Border.all(
-          color: Colors.white.withAlpha(28),
-          width: 1.2,
-        ),
+        border: Border.all(color: Colors.white.withAlpha(25), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withAlpha(160),
-            blurRadius: 28,
+            color: Colors.black.withAlpha(180),
+            blurRadius: 30,
             offset: const Offset(0, 10),
           ),
         ],
@@ -223,27 +297,26 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _dockItem(0, CupertinoIcons.waveform_path, 'Wave'),
-          _dockItem(1, CupertinoIcons.sparkles, 'Quantum'),
-          _dockItem(2, CupertinoIcons.wind, 'Breath'),
-          _dockItem(3, CupertinoIcons.circle_grid_hex, 'Chrono'),
-          _dockItem(4, CupertinoIcons.timer, 'Flow'),
+          _dockItem(0, CupertinoIcons.circle_grid_hex, 'Orbit'),
+          _dockItem(1, CupertinoIcons.bolt_fill, 'Ignition'),
+          _dockItem(2, CupertinoIcons.battery_charging, 'Bio-Energy'),
+          _dockItem(3, CupertinoIcons.bubble_left_bubble_right, 'Void'),
         ],
       ),
     );
   }
 
   Widget _dockItem(int index, IconData icon, String label) {
-    final bool isSelected = _currentIndex == index;
+    final bool isSelected = _currentTabIndex == index;
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        setState(() => _currentIndex = index);
+        setState(() => _currentTabIndex = index);
       },
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF00F5D4).withAlpha(35) : Colors.transparent,
           borderRadius: BorderRadius.circular(24),
@@ -261,7 +334,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
               label,
               style: TextStyle(
                 fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
                 color: isSelected ? const Color(0xFF00F5D4) : Colors.white38,
               ),
             ),
@@ -270,657 +343,321 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       ),
     );
   }
-}
 
-// ---------------------------------------------------------------------------
-// 1. NEURAL RESONANCE (Quantum Waveform Generator)
-// ---------------------------------------------------------------------------
-
-class NeuralResonanceScreen extends StatefulWidget {
-  const NeuralResonanceScreen({super.key});
-
-  @override
-  State<NeuralResonanceScreen> createState() => _NeuralResonanceScreenState();
-}
-
-class _NeuralResonanceScreenState extends State<NeuralResonanceScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _waveController;
-  int _selectedModeIndex = 2; // Alpha default
-  bool _isPlaying = false;
-  double _carrierFrequency = 432.0; // Hz Pythagorean Miracle
-  double _volume = 0.75;
-  int _sessionSeconds = 0;
-  Timer? _sessionTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _waveController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _waveController.dispose();
-    _sessionTimer?.cancel();
-    super.dispose();
-  }
-
-  void _togglePlayback() {
-    HapticFeedback.heavyImpact();
-    setState(() {
-      _isPlaying = !_isPlaying;
-      if (_isPlaying) {
-        _sessionTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          setState(() => _sessionSeconds++);
-        });
-      } else {
-        _sessionTimer?.cancel();
-      }
-    });
-  }
-
-  String _formatDuration(int seconds) {
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final activeMode = brainwaveModes[_selectedModeIndex];
-
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ListView(
-          padding: const EdgeInsets.only(top: 16, bottom: 120),
-          children: [
-            // Top HUD
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'AETHER RESONANCE',
-                      style: TextStyle(
-                        letterSpacing: 2.5,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: activeMode.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Neural Entrainment',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: activeMode.primaryColor.withAlpha(30),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: activeMode.primaryColor.withAlpha(80)),
-                  ),
-                  child: Text(
-                    _isPlaying ? 'ACTIVE • ${_formatDuration(_sessionSeconds)}' : 'STANDBY',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                      color: activeMode.primaryColor,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Live Waveform Canvas Card
-            Container(
-              height: 220,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                color: const Color(0xFF101420),
-                border: Border.all(color: Colors.white.withAlpha(20)),
-                boxShadow: [
-                  BoxShadow(
-                    color: activeMode.primaryColor.withAlpha(25),
-                    blurRadius: 30,
-                    spreadRadius: -4,
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: Stack(
-                  children: [
-                    AnimatedBuilder(
-                      animation: _waveController,
-                      builder: (context, child) {
-                        return CustomPaint(
-                          painter: WaveformPainter(
-                            animationValue: _waveController.value,
-                            primaryColor: activeMode.primaryColor,
-                            secondaryColor: activeMode.secondaryColor,
-                            frequencyFactor: activeMode.frequency,
-                            isPlaying: _isPlaying,
-                          ),
-                          child: const SizedBox.expand(),
-                        );
-                      },
-                    ),
-                    Positioned(
-                      top: 16,
-                      left: 18,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'TARGET DELTA: ${activeMode.targetHz}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                              color: activeMode.primaryColor,
-                            ),
-                          ),
-                          Text(
-                            'Carrier: ${_carrierFrequency.toStringAsFixed(0)} Hz Solfeggio',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Play / Pause Master Action Button
-            GestureDetector(
-              onTap: _togglePlayback,
-              child: Container(
-                height: 58,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(29),
-                  gradient: LinearGradient(
-                    colors: [
-                      activeMode.primaryColor,
-                      activeMode.secondaryColor,
-                    ],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: activeMode.primaryColor.withAlpha(90),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      _isPlaying ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
-                      color: Colors.black,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      _isPlaying ? 'STOP NEURAL SYNCHRONY' : 'ENGAGE NEURAL SYNCHRONY',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        letterSpacing: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Brainwave State Selector Carousel
-            const Text(
-              'TARGET BRAINWAVE STATE',
-              style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.white38,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 120,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: brainwaveModes.length,
-                separatorBuilder: (context, index) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final mode = brainwaveModes[index];
-                  final isSel = index == _selectedModeIndex;
-                  return GestureDetector(
-                    onTap: () {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selectedModeIndex = index);
-                    },
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 180,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isSel ? const Color(0xFF161C2C) : const Color(0xFF0E121B),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(
-                          color: isSel ? mode.primaryColor : Colors.white.withAlpha(15),
-                          width: isSel ? 1.8 : 1.0,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  mode.name,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: isSel ? mode.primaryColor : Colors.white70,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                mode.targetHz,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: mode.primaryColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            mode.state,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Harmonic Modulation & Tuning Sliders
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                color: const Color(0xFF0F1420),
-                border: Border.all(color: Colors.white.withAlpha(16)),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Carrier Frequency Tuning',
-                        style: TextStyle(fontSize: 13, color: Colors.white70),
-                      ),
-                      Text(
-                        '${_carrierFrequency.toInt()} Hz',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: activeMode.primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      thumbColor: activeMode.primaryColor,
-                      activeTrackColor: activeMode.primaryColor,
-                      inactiveTrackColor: Colors.white12,
-                    ),
-                    child: Slider(
-                      value: _carrierFrequency,
-                      min: 174.0,
-                      max: 963.0,
-                      divisions: 8,
-                      onChanged: (val) {
-                        setState(() => _carrierFrequency = val);
-                      },
-                    ),
-                  ),
-                  const Divider(color: Colors.white12, height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Acoustic Field Intensity',
-                        style: TextStyle(fontSize: 13, color: Colors.white70),
-                      ),
-                      Text(
-                        '${(_volume * 100).toInt()}%',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: activeMode.primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      thumbColor: activeMode.primaryColor,
-                      activeTrackColor: activeMode.primaryColor,
-                      inactiveTrackColor: Colors.white12,
-                    ),
-                    child: Slider(
-                      value: _volume,
-                      min: 0.1,
-                      max: 1.0,
-                      onChanged: (val) {
-                        setState(() => _volume = val);
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+  void _openAddNodeSheet() {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AddOrbitalNodeModal(onAdd: _addNewNode),
     );
   }
 }
 
-class WaveformPainter extends CustomPainter {
-  final double animationValue;
-  final Color primaryColor;
-  final Color secondaryColor;
-  final double frequencyFactor;
-  final bool isPlaying;
+// ---------------------------------------------------------------------------
+// 1. ORBITAL REALITY TAB (Gravitational Life Matrix)
+// ---------------------------------------------------------------------------
 
-  WaveformPainter({
-    required this.animationValue,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.frequencyFactor,
-    required this.isPlaying,
+class OrbitalRealityTab extends StatefulWidget {
+  final List<OrbitalNode> nodes;
+  final Function(String) onCompleteNode;
+  final VoidCallback onAddNode;
+  final int userXp;
+  final int userLevel;
+  final int streakDays;
+
+  const OrbitalRealityTab({
+    super.key,
+    required this.nodes,
+    required this.onCompleteNode,
+    required this.onAddNode,
+    required this.userXp,
+    required this.userLevel,
+    required this.streakDays,
   });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final double midY = size.height * 0.55;
-    final double amp = isPlaying ? 38.0 : 12.0;
-
-    // Draw background grid lines
-    final gridPaint = Paint()
-      ..color = Colors.white.withAlpha(12)
-      ..strokeWidth = 1.0;
-    for (double y = 30; y < size.height; y += 35) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    // Layer 1: Secondary Harmonic Wave
-    final path2 = Path();
-    for (double x = 0; x <= size.width; x += 3) {
-      final normX = x / size.width;
-      final y = midY +
-          math.sin((normX * 8 * (frequencyFactor / 8)) + (animationValue * 2 * math.pi * 1.5)) *
-              (amp * 0.55) +
-          math.cos((normX * 4) + animationValue * math.pi) * 8;
-      if (x == 0) {
-        path2.moveTo(x, y);
-      } else {
-        path2.lineTo(x, y);
-      }
-    }
-    final paint2 = Paint()
-      ..color = secondaryColor.withAlpha(90)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path2, paint2);
-
-    // Layer 2: Main Primary Harmonic Wave with glow
-    final path1 = Path();
-    for (double x = 0; x <= size.width; x += 2) {
-      final normX = x / size.width;
-      final y = midY +
-          math.sin((normX * 12 * (frequencyFactor / 6)) + (animationValue * 2 * math.pi * 2.0)) *
-              amp *
-          math.sin(normX * math.pi); // Taper edges
-      if (x == 0) {
-        path1.moveTo(x, y);
-      } else {
-        path1.lineTo(x, y);
-      }
-    }
-
-    final glowPaint = Paint()
-      ..color = primaryColor.withAlpha(60)
-      ..strokeWidth = 6.0
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path1, glowPaint);
-
-    final paint1 = Paint()
-      ..color = primaryColor
-      ..strokeWidth = 2.8
-      ..style = PaintingStyle.stroke;
-    canvas.drawPath(path1, paint1);
-  }
-
-  @override
-  bool shouldRepaint(covariant WaveformPainter oldDelegate) => true;
+  State<OrbitalRealityTab> createState() => _OrbitalRealityTabState();
 }
 
-// ---------------------------------------------------------------------------
-// 2. QUANTUM BIO-PARTICLE FIELD (Interactive Kinetic Physics)
-// ---------------------------------------------------------------------------
-
-class ParticleUniverseScreen extends StatefulWidget {
-  const ParticleUniverseScreen({super.key});
-
-  @override
-  State<ParticleUniverseScreen> createState() => _ParticleUniverseScreenState();
-}
-
-class _ParticleUniverseScreenState extends State<ParticleUniverseScreen>
+class _OrbitalRealityTabState extends State<OrbitalRealityTab>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  final List<QuantumParticle> _particles = [];
-  Offset? _touchPosition;
-  bool _isAttractorActive = false;
+  late AnimationController _orbitController;
+  OrbitalNode? _selectedNode;
+  final List<SupernovaParticle> _particles = [];
   final math.Random _random = math.Random();
 
   @override
   void initState() {
     super.initState();
-    _initParticles(80);
-    _animController = AnimationController(
+    _orbitController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 16),
-    )..addListener(_updatePhysics)..repeat();
+      duration: const Duration(seconds: 1),
+    )..addListener(_tickOrbit)..repeat();
   }
 
-  void _initParticles(int count) {
-    _particles.clear();
-    for (int i = 0; i < count; i++) {
+  void _tickOrbit() {
+    for (final node in widget.nodes) {
+      node.angle += node.speed;
+      if (node.angle > 2 * math.pi) node.angle -= 2 * math.pi;
+    }
+
+    // Update supernova particles
+    for (int i = _particles.length - 1; i >= 0; i--) {
+      final p = _particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 0.035;
+      if (p.life <= 0) {
+        _particles.removeAt(i);
+      }
+    }
+    setState(() {});
+  }
+
+  void _triggerSupernova(Offset center, Color color) {
+    for (int i = 0; i < 45; i++) {
+      final angle = _random.nextDouble() * 2 * math.pi;
+      final speed = _random.nextDouble() * 6.5 + 2.0;
       _particles.add(
-        QuantumParticle(
-          x: _random.nextDouble() * 380,
-          y: _random.nextDouble() * 700,
-          vx: (_random.nextDouble() - 0.5) * 1.8,
-          vy: (_random.nextDouble() - 0.5) * 1.8,
-          radius: _random.nextDouble() * 2.5 + 1.5,
-          color: i % 3 == 0
-              ? const Color(0xFF00F5D4)
-              : (i % 3 == 1 ? const Color(0xFF7B2CBF) : const Color(0xFFF72585)),
+        SupernovaParticle(
+          x: center.dx,
+          y: center.dy,
+          vx: math.cos(angle) * speed,
+          vy: math.sin(angle) * speed,
+          color: color,
+          life: 1.0,
         ),
       );
     }
   }
 
-  void _updatePhysics() {
-    for (final p in _particles) {
-      if (_isAttractorActive && _touchPosition != null) {
-        // Gravitational attractor towards touch
-        final dx = _touchPosition!.dx - p.x;
-        final dy = _touchPosition!.dy - p.y;
-        final dist = math.sqrt(dx * dx + dy * dy).clamp(10.0, 400.0);
-        final force = (120.0 / dist).clamp(0.0, 1.8);
-        p.vx += (dx / dist) * force * 0.15;
-        p.vy += (dy / dist) * force * 0.15;
-      }
-
-      p.x += p.vx;
-      p.y += p.vy;
-
-      // Friction
-      p.vx *= 0.99;
-      p.vy *= 0.99;
-
-      // Screen boundary wrap
-      if (p.x < 0) p.x = 400;
-      if (p.x > 400) p.x = 0;
-      if (p.y < 0) p.y = 800;
-      if (p.y > 800) p.y = 0;
-    }
-    setState(() {});
-  }
-
-  void _createShockwave(Offset pos) {
-    HapticFeedback.mediumImpact();
-    for (final p in _particles) {
-      final dx = p.x - pos.dx;
-      final dy = p.y - pos.dy;
-      final dist = math.sqrt(dx * dx + dy * dy).clamp(1.0, 500.0);
-      if (dist < 180) {
-        final push = (180 - dist) * 0.08;
-        p.vx += (dx / dist) * push;
-        p.vy += (dy / dist) * push;
-      }
-    }
-  }
-
   @override
   void dispose() {
-    _animController.dispose();
+    _orbitController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF06080D),
-      body: Stack(
+    final size = MediaQuery.of(context).size;
+    final center = Offset(size.width / 2, size.height * 0.44);
+
+    return SafeArea(
+      bottom: false,
+      child: Stack(
         children: [
-          // Touch gesture listener layer
-          GestureDetector(
-            onPanStart: (details) {
-              setState(() {
-                _touchPosition = details.localPosition;
-                _isAttractorActive = true;
-              });
-            },
-            onPanUpdate: (details) {
-              setState(() {
-                _touchPosition = details.localPosition;
-              });
-            },
-            onPanEnd: (_) {
-              setState(() => _isAttractorActive = false);
-            },
-            onDoubleTapDown: (details) {
-              _createShockwave(details.localPosition);
-            },
-            child: CustomPaint(
-              painter: ParticleCanvasPainter(
-                particles: _particles,
-                touchPosition: _touchPosition,
-                isAttractorActive: _isAttractorActive,
+          // Top HUD Bar (Level, XP, Streak)
+          Positioned(
+            top: 14,
+            left: 20,
+            right: 20,
+            child: _buildTopHud(),
+          ),
+
+          // Central Gravity Simulation Canvas
+          Positioned.fill(
+            child: GestureDetector(
+              onTapUp: (details) {
+                // Check if user tapped a node
+                for (final node in widget.nodes) {
+                  final nodeX = center.dx + math.cos(node.angle) * node.orbitRadius;
+                  final nodeY = center.dy + math.sin(node.angle) * node.orbitRadius;
+                  final dist = (details.localPosition - Offset(nodeX, nodeY)).distance;
+                  if (dist < node.mass + 15) {
+                    HapticFeedback.selectionClick();
+                    setState(() => _selectedNode = node);
+                    return;
+                  }
+                }
+                setState(() => _selectedNode = null);
+              },
+              child: CustomPaint(
+                painter: OrbitalMatrixPainter(
+                  center: center,
+                  nodes: widget.nodes,
+                  selectedNode: _selectedNode,
+                  particles: _particles,
+                ),
               ),
-              child: const SizedBox.expand(),
             ),
           ),
 
-          // Header Overlay
+          // Central Sun Tap Action (Core Focus)
           Positioned(
-            top: 54,
-            left: 20,
-            right: 20,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'QUANTUM FIELD',
-                      style: TextStyle(
-                        letterSpacing: 2.5,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF00F5D4),
-                      ),
+            left: center.dx - 38,
+            top: center.dy - 38,
+            child: GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                _triggerSupernova(center, const Color(0xFF00F5D4));
+              },
+              child: Container(
+                width: 76,
+                height: 76,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const RadialGradient(
+                    colors: [
+                      Color(0xFF00F5D4),
+                      Color(0xFF00BBF9),
+                      Colors.transparent,
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF00F5D4).withAlpha(120),
+                      blurRadius: 35,
+                      spreadRadius: 2,
                     ),
-                    SizedBox(height: 3),
+                  ],
+                ),
+                child: const Center(
+                  child: Icon(
+                    CupertinoIcons.flame_fill,
+                    color: Colors.black,
+                    size: 28,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Floating Add Action Button
+          Positioned(
+            top: 76,
+            right: 20,
+            child: GestureDetector(
+              onTap: widget.onAddNode,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00F5D4).withAlpha(30),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF00F5D4)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: const [
+                    Icon(CupertinoIcons.add, size: 14, color: Color(0xFF00F5D4)),
+                    SizedBox(width: 4),
                     Text(
-                      'Bio-Kinetic Matrix',
+                      'SPAWN ORB',
                       style: TextStyle(
-                        fontSize: 22,
+                        fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        letterSpacing: 1.2,
+                        color: Color(0xFF00F5D4),
                       ),
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(15),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Text(
-                    'DRAG TO ATTRACT • DOUBLE-TAP BURST',
-                    style: TextStyle(
-                      fontSize: 9,
-                      letterSpacing: 1.0,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white70,
+              ),
+            ),
+          ),
+
+          // Inspector Card at Bottom if a Node is Selected
+          if (_selectedNode != null)
+            Positioned(
+              left: 20,
+              right: 20,
+              bottom: 110,
+              child: _buildNodeInspectorCard(center),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopHud() {
+    final nextLevelXp = widget.userLevel * 300;
+    final progress = (widget.userXp % 300) / 300.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1422).withAlpha(200),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withAlpha(20)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF00F5D4).withAlpha(30),
+                  border: Border.all(color: const Color(0xFF00F5D4)),
+                ),
+                child: Center(
+                  child: Text(
+                    'L${widget.userLevel}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF00F5D4),
+                      fontSize: 14,
                     ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'SYNAPTIC MASTERY',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                      color: Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${widget.userXp} / $nextLevelXp XP',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: 110,
+                    child: LinearProgressIndicator(
+                      value: progress.clamp(0.05, 1.0),
+                      minHeight: 4,
+                      backgroundColor: Colors.white12,
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFB703).withAlpha(25),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFFFB703).withAlpha(80)),
+            ),
+            child: Row(
+              children: [
+                const Icon(CupertinoIcons.flame_fill, size: 16, color: Color(0xFFFFB703)),
+                const SizedBox(width: 6),
+                Text(
+                  '${widget.streakDays}d FLOW',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFFFFB703),
                   ),
                 ),
               ],
@@ -930,213 +667,278 @@ class _ParticleUniverseScreenState extends State<ParticleUniverseScreen>
       ),
     );
   }
+
+  Widget _buildNodeInspectorCard(Offset center) {
+    final node = _selectedNode!;
+    final nodeX = center.dx + math.cos(node.angle) * node.orbitRadius;
+    final nodeY = center.dy + math.sin(node.angle) * node.orbitRadius;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF101728),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: node.glowColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: node.glowColor.withAlpha(50),
+            blurRadius: 30,
+            spreadRadius: -4,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                node.category.name.toUpperCase(),
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                  color: node.glowColor,
+                ),
+              ),
+              Text(
+                '+${node.xpValue} XP',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  color: node.glowColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            node.title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    widget.onCompleteNode(node.id);
+                    _triggerSupernova(Offset(nodeX, nodeY), node.glowColor);
+                    setState(() => _selectedNode = null);
+                  },
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      gradient: LinearGradient(
+                        colors: [node.glowColor, node.glowColor.withAlpha(180)],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(
+                        node.isCompleted ? 'ABSORBED • HARVESTED' : 'ABSORB ORB INTO CORE',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => setState(() => _selectedNode = null),
+                child: Container(
+                  height: 48,
+                  width: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withAlpha(15),
+                  ),
+                  child: const Icon(CupertinoIcons.xmark, color: Colors.white70, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
-class QuantumParticle {
+class SupernovaParticle {
   double x;
   double y;
   double vx;
   double vy;
-  double radius;
   Color color;
+  double life;
 
-  QuantumParticle({
+  SupernovaParticle({
     required this.x,
     required this.y,
     required this.vx,
     required this.vy,
-    required this.radius,
     required this.color,
+    required this.life,
   });
 }
 
-class ParticleCanvasPainter extends CustomPainter {
-  final List<QuantumParticle> particles;
-  final Offset? touchPosition;
-  final bool isAttractorActive;
+class OrbitalMatrixPainter extends CustomPainter {
+  final Offset center;
+  final List<OrbitalNode> nodes;
+  final OrbitalNode? selectedNode;
+  final List<SupernovaParticle> particles;
 
-  ParticleCanvasPainter({
+  OrbitalMatrixPainter({
+    required this.center,
+    required this.nodes,
+    required this.selectedNode,
     required this.particles,
-    required this.touchPosition,
-    required this.isAttractorActive,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Constellation network lines between close particles
-    final linePaint = Paint()..strokeWidth = 0.8;
-    for (int i = 0; i < particles.length; i++) {
-      for (int j = i + 1; j < particles.length; j++) {
-        final p1 = particles[i];
-        final p2 = particles[j];
-        final dx = p1.x - p2.x;
-        final dy = p1.y - p2.y;
-        final dist = math.sqrt(dx * dx + dy * dy);
-        if (dist < 65) {
-          final alpha = ((1.0 - (dist / 65)) * 60).toInt();
-          linePaint.color = Colors.white.withAlpha(alpha);
-          canvas.drawLine(Offset(p1.x, p1.y), Offset(p2.x, p2.y), linePaint);
-        }
+    // 1. Draw Concentric Orbital Rings
+    final ringPaint = Paint()
+      ..color = Colors.white.withAlpha(14)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    final rings = [75.0, 105.0, 145.0, 185.0];
+    for (final r in rings) {
+      canvas.drawCircle(center, r, ringPaint);
+    }
+
+    // 2. Draw Gravitational Rays connecting Sun to Nodes
+    for (final node in nodes) {
+      final nodeX = center.dx + math.cos(node.angle) * node.orbitRadius;
+      final nodeY = center.dy + math.sin(node.angle) * node.orbitRadius;
+
+      final rayPaint = Paint()
+        ..color = node.glowColor.withAlpha(node.isCompleted ? 15 : 45)
+        ..strokeWidth = 1.0;
+      canvas.drawLine(center, Offset(nodeX, nodeY), rayPaint);
+    }
+
+    // 3. Draw Nodes (Planet Orbs)
+    for (final node in nodes) {
+      final nodeX = center.dx + math.cos(node.angle) * node.orbitRadius;
+      final nodeY = center.dy + math.sin(node.angle) * node.orbitRadius;
+      final pos = Offset(nodeX, nodeY);
+
+      if (node == selectedNode) {
+        // Selection Aura
+        final selPaint = Paint()
+          ..color = node.glowColor.withAlpha(80)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.0;
+        canvas.drawCircle(pos, node.mass + 8, selPaint);
       }
+
+      // Outer Glow
+      final glowPaint = Paint()
+        ..color = node.glowColor.withAlpha(node.isCompleted ? 40 : 120)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      canvas.drawCircle(pos, node.mass, glowPaint);
+
+      // Inner Core
+      final corePaint = Paint()
+        ..color = node.isCompleted ? Colors.white24 : node.glowColor;
+      canvas.drawCircle(pos, node.mass * 0.7, corePaint);
     }
 
-    // 2. Draw Touch Attractor Ripple
-    if (isAttractorActive && touchPosition != null) {
-      final ripplePaint = Paint()
-        ..color = const Color(0xFF00F5D4).withAlpha(40)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      canvas.drawCircle(touchPosition!, 55, ripplePaint);
-      canvas.drawCircle(touchPosition!, 15, Paint()..color = const Color(0xFF00F5D4).withAlpha(120));
-    }
-
-    // 3. Draw Particles
+    // 4. Draw Supernova Particles
     for (final p in particles) {
-      final paint = Paint()..color = p.color;
-      canvas.drawCircle(Offset(p.x, p.y), p.radius, paint);
+      final partPaint = Paint()
+        ..color = p.color.withAlpha((p.life * 255).toInt());
+      canvas.drawCircle(Offset(p.x, p.y), 2.5 * p.life, partPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant ParticleCanvasPainter oldDelegate) => true;
+  bool shouldRepaint(covariant OrbitalMatrixPainter oldDelegate) => true;
 }
 
 // ---------------------------------------------------------------------------
-// 3. SACRED RESPIRATION & HRV COHERENCE COACH
+// 2. NEURAL IGNITION (120s Procrastination Destroyer)
 // ---------------------------------------------------------------------------
 
-class SacredBreathingScreen extends StatefulWidget {
-  const SacredBreathingScreen({super.key});
+class NeuralIgnitionTab extends StatefulWidget {
+  const NeuralIgnitionTab({super.key});
 
   @override
-  State<SacredBreathingScreen> createState() => _SacredBreathingScreenState();
+  State<NeuralIgnitionTab> createState() => _NeuralIgnitionTabState();
 }
 
-class _SacredBreathingScreenState extends State<SacredBreathingScreen>
+class _NeuralIgnitionTabState extends State<NeuralIgnitionTab>
     with SingleTickerProviderStateMixin {
-  late AnimationController _breathAnim;
+  late AnimationController _pulseController;
+  int _secondsLeft = 120;
+  bool _isRunning = false;
   Timer? _timer;
-  int _patternIndex = 0;
-  String _currentPhase = 'Inhale';
-  int _secondsRemainingInPhase = 4;
-  int _completedCycles = 0;
-  bool _isActive = false;
-
-  // Patterns: [Inhale, Hold, Exhale, Rest]
-  final List<Map<String, dynamic>> _patterns = [
-    {
-      'title': '4-4-4-4 Box Breathing',
-      'subtitle': 'Tactical autonomic nervous equilibrium',
-      'durations': [4, 4, 4, 4],
-      'phases': ['Inhale', 'Hold', 'Exhale', 'Pause'],
-    },
-    {
-      'title': '4-7-8 Vagus Reset',
-      'subtitle': 'Deep parasympathetic sleep induction',
-      'durations': [4, 7, 8, 0],
-      'phases': ['Inhale', 'Deep Hold', 'Release', ''],
-    },
-    {
-      'title': '5.5s Heart Coherence',
-      'subtitle': 'Heart Rate Variability (HRV) alignment',
-      'durations': [5, 0, 5, 0],
-      'phases': ['Inhale Flow', '', 'Exhale Flow', ''],
-    },
-  ];
+  final TextEditingController _taskInput = TextEditingController(
+    text: 'Write the first 3 lines of code',
+  );
 
   @override
   void initState() {
     super.initState();
-    _breathAnim = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
-    );
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _breathAnim.dispose();
+    _pulseController.dispose();
     _timer?.cancel();
+    _taskInput.dispose();
     super.dispose();
   }
 
-  void _startBreathing() {
+  void _startIgnition() {
     HapticFeedback.heavyImpact();
     setState(() {
-      _isActive = true;
-      _runCycle();
+      _isRunning = true;
+      _secondsLeft = 120;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_secondsLeft > 0) {
+        setState(() => _secondsLeft--);
+        if (_secondsLeft % 10 == 0) HapticFeedback.lightImpact();
+      } else {
+        _timer?.cancel();
+        setState(() => _isRunning = false);
+        HapticFeedback.heavyImpact();
+      }
     });
   }
 
-  void _stopBreathing() {
-    HapticFeedback.mediumImpact();
+  void _abortIgnition() {
     _timer?.cancel();
-    _breathAnim.stop();
     setState(() {
-      _isActive = false;
-      _currentPhase = 'Ready';
-      _secondsRemainingInPhase = 4;
+      _isRunning = false;
+      _secondsLeft = 120;
     });
-  }
-
-  void _runCycle() {
-    if (!_isActive) return;
-    final currentPattern = _patterns[_patternIndex];
-    final List<int> durations = currentPattern['durations'];
-    final List<String> phases = currentPattern['phases'];
-
-    int phaseIdx = 0;
-
-    void advancePhase() {
-      if (!_isActive) return;
-
-      while (durations[phaseIdx] == 0) {
-        phaseIdx = (phaseIdx + 1) % 4;
-        if (phaseIdx == 0) _completedCycles++;
-      }
-
-      final phaseName = phases[phaseIdx];
-      final phaseDuration = durations[phaseIdx];
-
-      setState(() {
-        _currentPhase = phaseName;
-        _secondsRemainingInPhase = phaseDuration;
-      });
-
-      HapticFeedback.mediumImpact();
-
-      if (phaseIdx == 0) {
-        // Inhale expand
-        _breathAnim.duration = Duration(seconds: phaseDuration);
-        _breathAnim.forward(from: 0.0);
-      } else if (phaseIdx == 2) {
-        // Exhale contract
-        _breathAnim.duration = Duration(seconds: phaseDuration);
-        _breathAnim.reverse(from: 1.0);
-      }
-
-      _timer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted || !_isActive) {
-          t.cancel();
-          return;
-        }
-        setState(() => _secondsRemainingInPhase--);
-        if (_secondsRemainingInPhase <= 0) {
-          t.cancel();
-          phaseIdx = (phaseIdx + 1) % 4;
-          if (phaseIdx == 0) {
-            setState(() => _completedCycles++);
-          }
-          advancePhase();
-        }
-      });
-    }
-
-    advancePhase();
   }
 
   @override
   Widget build(BuildContext context) {
+    final progress = (120 - _secondsLeft) / 120.0;
+
     return SafeArea(
       bottom: false,
       child: Padding(
@@ -1144,7 +946,7 @@ class _SacredBreathingScreenState extends State<SacredBreathingScreen>
         child: ListView(
           padding: const EdgeInsets.only(top: 16, bottom: 120),
           children: [
-            // Top HUD
+            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1152,17 +954,17 @@ class _SacredBreathingScreenState extends State<SacredBreathingScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: const [
                     Text(
-                      'BIO-RESPIRATION',
+                      'FRICTION BREAKER',
                       style: TextStyle(
                         letterSpacing: 2.5,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Color(0xFF00BBF9),
+                        color: Color(0xFFFF0080),
                       ),
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Sacred Coherence',
+                      '120s Neural Ignition',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -1172,447 +974,38 @@ class _SacredBreathingScreenState extends State<SacredBreathingScreen>
                   ],
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00BBF9).withAlpha(28),
-                    borderRadius: BorderRadius.circular(20),
+                    color: const Color(0xFFFF0080).withAlpha(25),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Text(
-                    'CYCLES: $_completedCycles',
-                    style: const TextStyle(
-                      fontSize: 11,
+                  child: const Text(
+                    'ZERO INERTIA',
+                    style: TextStyle(
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.2,
-                      color: Color(0xFF00BBF9),
+                      color: Color(0xFFFF0080),
                     ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Expanding Sacred Geometry Breathing Sphere
-            Center(
-              child: SizedBox(
-                width: 280,
-                height: 280,
-                child: AnimatedBuilder(
-                  animation: _breathAnim,
-                  builder: (context, child) {
-                    final scale = 0.5 + (_breathAnim.value * 0.5);
-                    return Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        CustomPaint(
-                          painter: SacredGeometryPainter(progress: _breathAnim.value),
-                          child: const SizedBox.expand(),
-                        ),
-                        // Inner pulsing core
-                        Container(
-                          width: 140 * scale,
-                          height: 140 * scale,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                const Color(0xFF00F5D4).withAlpha(160),
-                                const Color(0xFF00BBF9).withAlpha(40),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                        // Status Text
-                        Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _isActive ? _currentPhase.toUpperCase() : 'STANDBY',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2.0,
-                                color: Colors.white,
-                              ),
-                            ),
-                            if (_isActive) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                '${_secondsRemainingInPhase}s',
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w800,
-                                  color: Color(0xFF00F5D4),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Start / Stop Action Button
-            GestureDetector(
-              onTap: _isActive ? _stopBreathing : _startBreathing,
-              child: Container(
-                height: 58,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(29),
-                  gradient: LinearGradient(
-                    colors: _isActive
-                        ? [const Color(0xFFF72585), const Color(0xFF7209B7)]
-                        : [const Color(0xFF00BBF9), const Color(0xFF00F5D4)],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (_isActive ? const Color(0xFFF72585) : const Color(0xFF00BBF9))
-                          .withAlpha(90),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    _isActive ? 'END SESSION' : 'BEGIN BIO-COHERENCE',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Breathing Pattern Selector Cards
-            const Text(
-              'COHERENCE PROTOCOL',
-              style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.5,
-                fontWeight: FontWeight.bold,
-                color: Colors.white38,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...List.generate(_patterns.length, (index) {
-              final item = _patterns[index];
-              final isSel = index == _patternIndex;
-              return GestureDetector(
-                onTap: () {
-                  if (_isActive) _stopBreathing();
-                  setState(() => _patternIndex = index);
-                },
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isSel ? const Color(0xFF141A28) : const Color(0xFF0D121B),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isSel ? const Color(0xFF00BBF9) : Colors.white.withAlpha(15),
-                      width: isSel ? 1.5 : 1.0,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['title'],
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: isSel ? const Color(0xFF00BBF9) : Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            item['subtitle'],
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.white54,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Icon(
-                        isSel ? CupertinoIcons.checkmark_alt_circle_fill : CupertinoIcons.circle,
-                        color: isSel ? const Color(0xFF00BBF9) : Colors.white24,
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SacredGeometryPainter extends CustomPainter {
-  final double progress;
-
-  SacredGeometryPainter({required this.progress});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final baseRadius = 55.0 + (progress * 45.0);
-
-    final linePaint = Paint()
-      ..color = const Color(0xFF00BBF9).withAlpha((30 + (progress * 40)).toInt())
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    // Draw 6 concentric overlapping circles (Flower of Life nucleus)
-    const petals = 6;
-    for (int i = 0; i < petals; i++) {
-      final angle = (i * 2 * math.pi) / petals;
-      final offset = Offset(
-        center.dx + math.cos(angle) * (baseRadius * 0.65),
-        center.dy + math.sin(angle) * (baseRadius * 0.65),
-      );
-      canvas.drawCircle(offset, baseRadius * 0.7, linePaint);
-    }
-
-    // Outer boundary ring
-    final outerPaint = Paint()
-      ..color = const Color(0xFF00F5D4).withAlpha(60)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8;
-    canvas.drawCircle(center, baseRadius * 1.15, outerPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant SacredGeometryPainter oldDelegate) => true;
-}
-
-// ---------------------------------------------------------------------------
-// 4. CHRONOBIOLOGICAL AI CLOCK (Circadian Neuro-Optimization)
-// ---------------------------------------------------------------------------
-
-class CircadianClockScreen extends StatelessWidget {
-  const CircadianClockScreen({super.key});
-
-  CircadianProfile _calculateCurrentPhase() {
-    final now = DateTime.now();
-    final hour = now.hour;
-
-    if (hour >= 6 && hour < 9) {
-      return const CircadianProfile(
-        name: 'Cortisol Awakening',
-        energyPercent: 82,
-        phase: 'Photonic & Dopamine Activation',
-        primaryAdvice: 'View 10 min of morning sunlight; delay caffeine by 90 minutes.',
-        color: Color(0xFFFFB703),
-      );
-    } else if (hour >= 9 && hour < 12) {
-      return const CircadianProfile(
-        name: 'Executive Brain Peak',
-        energyPercent: 96,
-        phase: 'Prefrontal High-Cognitive Bandwidth',
-        primaryAdvice: 'Tackle high-friction tasks, deep analytical thinking and coding.',
-        color: Color(0xFF00F5D4),
-      );
-    } else if (hour >= 12 && hour < 14) {
-      return const CircadianProfile(
-        name: 'Post-Prandial Pause',
-        energyPercent: 64,
-        phase: 'Autonomic Digest & Reset',
-        primaryAdvice: 'Take a 20 min walk or theta meditation; avoid heavy carbs.',
-        color: Color(0xFF48CAE4),
-      );
-    } else if (hour >= 14 && hour < 17) {
-      return const CircadianProfile(
-        name: 'Creative Divergence',
-        energyPercent: 88,
-        phase: 'Associative Memory & Brainstorming',
-        primaryAdvice: 'Optimal time for creative architecture, writing and collaborative syncs.',
-        color: Color(0xFF7B2CBF),
-      );
-    } else if (hour >= 17 && hour < 20) {
-      return const CircadianProfile(
-        name: 'Neuromuscular Peak',
-        energyPercent: 90,
-        phase: 'Optimal Body Temp & Reaction Velocity',
-        primaryAdvice: 'Peak window for intense physical training and high motor coordination.',
-        color: Color(0xFFFF5400),
-      );
-    } else if (hour >= 20 && hour < 23) {
-      return const CircadianProfile(
-        name: 'Melatonin Surge',
-        energyPercent: 50,
-        phase: 'Dim-Light Twilight Wind-Down',
-        primaryAdvice: 'Block blue light, lower ambient temp to 19°C, engage in soft alpha audio.',
-        color: Color(0xFFF72585),
-      );
-    } else {
-      return const CircadianProfile(
-        name: 'Glymphatic Cleansing',
-        energyPercent: 25,
-        phase: 'Deep Cellular & Memory Detox',
-        primaryAdvice: 'Cerebrospinal fluid clears metabolic waste; prioritize deep REM and slow-wave sleep.',
-        color: Color(0xFF3A0CA3),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final profile = _calculateCurrentPhase();
-    final now = DateTime.now();
-
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ListView(
-          padding: const EdgeInsets.only(top: 16, bottom: 120),
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'CHRONOBIOLOGY AI',
-                      style: TextStyle(
-                        letterSpacing: 2.5,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: profile.color,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Circadian Rhythm',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white70,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
 
-            // Circular 24-Hour Circadian Dial
-            Center(
-              child: SizedBox(
-                width: 250,
-                height: 250,
-                child: CustomPaint(
-                  painter: CircadianDialPainter(
-                    currentHour: now.hour + (now.minute / 60.0),
-                    accentColor: profile.color,
-                  ),
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${profile.energyPercent}%',
-                          style: TextStyle(
-                            fontSize: 44,
-                            fontWeight: FontWeight.w900,
-                            color: profile.color,
-                          ),
-                        ),
-                        const Text(
-                          'COGNITIVE CAPACITY',
-                          style: TextStyle(
-                            fontSize: 9,
-                            letterSpacing: 1.5,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white54,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // Active Biological Phase Card
+            // Scientific Prompt Card
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                color: const Color(0xFF101522),
-                border: Border.all(color: profile.color.withAlpha(70)),
-                boxShadow: [
-                  BoxShadow(
-                    color: profile.color.withAlpha(20),
-                    blurRadius: 24,
-                  ),
-                ],
+                color: const Color(0xFF0F1524),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withAlpha(15)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: profile.color,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        profile.name.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                          color: profile.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    profile.phase,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  const Divider(color: Colors.white12),
-                  const SizedBox(height: 8),
                   const Text(
-                    'OPTIMAL NEURO-PROTOCOL:',
+                    'THE 120-SECOND NEURO-PRINCIPLE:',
                     style: TextStyle(
                       fontSize: 10,
                       letterSpacing: 1.2,
@@ -1621,219 +1014,32 @@ class CircadianClockScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    profile.primaryAdvice,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.4,
-                      color: Colors.white70,
+                  const Text(
+                    'The brain craves avoidance until task-initiation inertia is broken. Commit to doing ONLY 120 seconds of the micro-step below. Dopamine will handle the rest.',
+                    style: TextStyle(fontSize: 12, height: 1.4, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: _taskInput,
+                    enabled: !_isRunning,
+                    style: const TextStyle(fontSize: 14, color: Colors.white),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.black38,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                      prefixIcon: const Icon(CupertinoIcons.bolt, color: Color(0xFFFF0080)),
+                      hintText: 'Define your tiny 120s action...',
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+            const SizedBox(height: 36),
 
-class CircadianProfile {
-  final String name;
-  final int energyPercent;
-  final String phase;
-  final String primaryAdvice;
-  final Color color;
-
-  const CircadianProfile({
-    required this.name,
-    required this.energyPercent,
-    required this.phase,
-    required this.primaryAdvice,
-    required this.color,
-  });
-}
-
-class CircadianDialPainter extends CustomPainter {
-  final double currentHour;
-  final Color accentColor;
-
-  CircadianDialPainter({
-    required this.currentHour,
-    required this.accentColor,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 16;
-
-    // Track Background
-    final trackPaint = Paint()
-      ..color = Colors.white.withAlpha(20)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10;
-    canvas.drawCircle(center, radius, trackPaint);
-
-    // Glowing Arc based on current hour in 24h
-    final sweepAngle = (currentHour / 24.0) * 2 * math.pi;
-    final arcPaint = Paint()
-      ..color = accentColor
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = 12;
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      -math.pi / 2,
-      sweepAngle,
-      false,
-      arcPaint,
-    );
-
-    // 24h hour tick marks
-    final tickPaint = Paint()..strokeWidth = 1.5;
-    for (int h = 0; h < 24; h += 3) {
-      final angle = (h / 24.0) * 2 * math.pi - (math.pi / 2);
-      final p1 = Offset(
-        center.dx + math.cos(angle) * (radius - 12),
-        center.dy + math.sin(angle) * (radius - 12),
-      );
-      final p2 = Offset(
-        center.dx + math.cos(angle) * (radius - 20),
-        center.dy + math.sin(angle) * (radius - 20),
-      );
-      tickPaint.color = Colors.white.withAlpha(60);
-      canvas.drawLine(p1, p2, tickPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CircadianDialPainter oldDelegate) => true;
-}
-
-// ---------------------------------------------------------------------------
-// 5. QUANTUM FLOW SPRINT (HUD Deep Work Timer)
-// ---------------------------------------------------------------------------
-
-class QuantumFlowScreen extends StatefulWidget {
-  const QuantumFlowScreen({super.key});
-
-  @override
-  State<QuantumFlowScreen> createState() => _QuantumFlowScreenState();
-}
-
-class _QuantumFlowScreenState extends State<QuantumFlowScreen> {
-  int _targetMinutes = 45;
-  int _remainingSeconds = 45 * 60;
-  bool _isRunning = false;
-  Timer? _timer;
-  int _distractionCounter = 0;
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  void _toggleTimer() {
-    HapticFeedback.heavyImpact();
-    setState(() {
-      _isRunning = !_isRunning;
-      if (_isRunning) {
-        _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-          if (!mounted) return;
-          if (_remainingSeconds > 0) {
-            setState(() => _remainingSeconds--);
-          } else {
-            _timer?.cancel();
-            setState(() => _isRunning = false);
-            HapticFeedback.heavyImpact();
-          }
-        });
-      } else {
-        _timer?.cancel();
-      }
-    });
-  }
-
-  void _resetTimer(int minutes) {
-    _timer?.cancel();
-    setState(() {
-      _targetMinutes = minutes;
-      _remainingSeconds = minutes * 60;
-      _isRunning = false;
-      _distractionCounter = 0;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final m = _remainingSeconds ~/ 60;
-    final s = _remainingSeconds % 60;
-    final progress = 1.0 - (_remainingSeconds / (_targetMinutes * 60));
-
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ListView(
-          padding: const EdgeInsets.only(top: 16, bottom: 120),
-          children: [
-            // Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'DEEP WORK HUD',
-                      style: TextStyle(
-                        letterSpacing: 2.5,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF00F5D4),
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Quantum Sprint',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    setState(() => _distractionCounter++);
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF72585).withAlpha(30),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFF72585).withAlpha(80)),
-                    ),
-                    child: Text(
-                      'LOG DISTRACTION: $_distractionCounter',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFFF72585),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // Circular HUD Timer
+            // Giant Hyper-Pulsing Core Gauge
             Center(
               child: SizedBox(
                 width: 250,
@@ -1842,80 +1048,234 @@ class _QuantumFlowScreenState extends State<QuantumFlowScreen> {
                   alignment: Alignment.center,
                   children: [
                     SizedBox(
-                      width: 230,
-                      height: 230,
+                      width: 240,
+                      height: 240,
                       child: CircularProgressIndicator(
                         value: progress,
                         strokeWidth: 10,
-                        backgroundColor: Colors.white12,
-                        valueColor: const AlwaysStoppedAnimation(Color(0xFF00F5D4)),
+                        backgroundColor: Colors.white10,
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFFFF0080)),
                       ),
                     ),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: -1,
-                            color: Colors.white,
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        final scale = _isRunning ? 1.0 + (_pulseController.value * 0.08) : 1.0;
+                        return Transform.scale(
+                          scale: scale,
+                          child: Container(
+                            width: 170,
+                            height: 170,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: RadialGradient(
+                                colors: [
+                                  const Color(0xFFFF0080).withAlpha(_isRunning ? 120 : 40),
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${_secondsLeft}s',
+                                    style: const TextStyle(
+                                      fontSize: 52,
+                                      fontWeight: FontWeight.w900,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  Text(
+                                    _isRunning ? 'MOMENTUM FIRING' : 'READY TO ENGAGE',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.5,
+                                      color: Color(0xFFFF0080),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                        Text(
-                          _isRunning ? 'FLOW PROTOCOL ENGAGED' : 'READY TO ENGAGE',
-                          style: const TextStyle(
-                            fontSize: 10,
-                            letterSpacing: 1.5,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF00F5D4),
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 36),
 
-            // Play / Pause Toggle
+            // Master Ignition Trigger Button
             GestureDetector(
-              onTap: _toggleTimer,
+              onTap: _isRunning ? _abortIgnition : _startIgnition,
               child: Container(
-                height: 58,
+                height: 60,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(29),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00F5D4), Color(0xFF00BBF9)],
+                  borderRadius: BorderRadius.circular(30),
+                  gradient: LinearGradient(
+                    colors: _isRunning
+                        ? [const Color(0xFF7928CA), const Color(0xFFFF0080)]
+                        : [const Color(0xFFFF0080), const Color(0xFFFFB703)],
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF00F5D4).withAlpha(80),
-                      blurRadius: 20,
-                      offset: const Offset(0, 6),
+                      color: const Color(0xFFFF0080).withAlpha(90),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
                 child: Center(
                   child: Text(
-                    _isRunning ? 'PAUSE FLOW SPRINT' : 'START FLOW SPRINT',
+                    _isRunning ? 'ABORT IGNITION' : 'FIRE 120s IGNITION ENGINE',
                     style: const TextStyle(
                       color: Colors.black,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       fontSize: 13,
-                      letterSpacing: 1.4,
+                      letterSpacing: 1.5,
                     ),
                   ),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. BIO-BATTERY TAB (Circadian Capacity Predictor)
+// ---------------------------------------------------------------------------
+
+class BioBatteryTab extends StatelessWidget {
+  const BioBatteryTab({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final hour = now.hour;
+
+    int batteryLevel = 85;
+    String status = 'OPTIMAL FOCUS';
+    Color glowColor = const Color(0xFF00F5D4);
+
+    if (hour >= 6 && hour < 11) {
+      batteryLevel = 92;
+      status = 'CORTISOL SURGE';
+      glowColor = const Color(0xFFFFB703);
+    } else if (hour >= 11 && hour < 14) {
+      batteryLevel = 68;
+      status = 'POST-LUNCH ADENOSINE';
+      glowColor = const Color(0xFF00BBF9);
+    } else if (hour >= 14 && hour < 18) {
+      batteryLevel = 88;
+      status = 'SECOND PEAK';
+      glowColor = const Color(0xFF00F5D4);
+    } else if (hour >= 18 && hour < 22) {
+      batteryLevel = 54;
+      status = 'TWILIGHT RESTORATION';
+      glowColor = const Color(0xFFFF0080);
+    } else {
+      batteryLevel = 28;
+      status = 'GLYMPHATIC RECHARGE';
+      glowColor = const Color(0xFF7928CA);
+    }
+
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: ListView(
+          padding: const EdgeInsets.only(top: 16, bottom: 120),
+          children: [
+            // Top Title
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'CIRCADIAN TELEMETRY',
+                  style: TextStyle(
+                    letterSpacing: 2.5,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: glowColor,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Biological Battery',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
-            // Sprint Interval Presets
+            // Giant Futuristic Battery Cell
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                color: const Color(0xFF0D1322),
+                border: Border.all(color: glowColor.withAlpha(60)),
+                boxShadow: [
+                  BoxShadow(
+                    color: glowColor.withAlpha(25),
+                    blurRadius: 30,
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        status,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1.2,
+                          color: glowColor,
+                        ),
+                      ),
+                      Text(
+                        '$batteryLevel%',
+                        style: TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.w900,
+                          color: glowColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: batteryLevel / 100.0,
+                      minHeight: 18,
+                      backgroundColor: Colors.white10,
+                      valueColor: AlwaysStoppedAnimation(glowColor),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Circadian Timeline Recommendation Cards
             const Text(
-              'ULTRADIAN CYCLE PRESETS',
+              'CHRONO-PROTOCOL TODAY',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.5,
@@ -1924,14 +1284,29 @@ class _QuantumFlowScreenState extends State<QuantumFlowScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                _presetButton(25, '25m Pomodoro'),
-                const SizedBox(width: 10),
-                _presetButton(45, '45m Deep Sprint'),
-                const SizedBox(width: 10),
-                _presetButton(90, '90m Ultradian'),
-              ],
+            _protocolCard(
+              '09:00 - 12:00',
+              'Deep Cognitive Window',
+              'Prefrontal cortex is at maximum throughput. Reserve for coding, design and hard logic.',
+              const Color(0xFF00F5D4),
+            ),
+            _protocolCard(
+              '13:00 - 14:30',
+              'Adenosine Dip (Rest)',
+              'Avoid high-stakes meetings. Take a 20 min walk or theta frequency reset.',
+              const Color(0xFF00BBF9),
+            ),
+            _protocolCard(
+              '15:00 - 17:30',
+              'Creative Synthesis',
+              'Associative memory spikes. Brainstorm, map architecture, communicate vision.',
+              const Color(0xFFFF0080),
+            ),
+            _protocolCard(
+              '21:00 - 23:00',
+              'Blue-Light Quarantine',
+              'Melatonin onset. Zero screen brightness, prepare biological recovery.',
+              const Color(0xFF7928CA),
             ),
           ],
         ),
@@ -1939,38 +1314,446 @@ class _QuantumFlowScreenState extends State<QuantumFlowScreen> {
     );
   }
 
-  Widget _presetButton(int minutes, String label) {
-    final isSel = _targetMinutes == minutes;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => _resetTimer(minutes),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: isSel ? const Color(0xFF151D2C) : const Color(0xFF0D121B),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: isSel ? const Color(0xFF00F5D4) : Colors.white.withAlpha(15),
-            ),
-          ),
-          child: Column(
+  Widget _protocolCard(String time, String title, String desc, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0E1422),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(40)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${minutes}m',
+                time,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 11,
                   fontWeight: FontWeight.bold,
-                  color: isSel ? const Color(0xFF00F5D4) : Colors.white,
+                  letterSpacing: 1.1,
+                  color: color,
                 ),
               ),
-              const SizedBox(height: 3),
+              Icon(CupertinoIcons.waveform, size: 14, color: color),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style: const TextStyle(fontSize: 12, color: Colors.white54, height: 1.3),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 4. THOUGHT VOID TAB (Interactive Spatial Memory Bubbles)
+// ---------------------------------------------------------------------------
+
+class ThoughtVoidTab extends StatefulWidget {
+  const ThoughtVoidTab({super.key});
+
+  @override
+  State<ThoughtVoidTab> createState() => _ThoughtVoidTabState();
+}
+
+class _ThoughtVoidTabState extends State<ThoughtVoidTab>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _physicsController;
+  final List<ThoughtBubble> _bubbles = [
+    ThoughtBubble(
+      id: '1',
+      text: 'AI Agent Architecture',
+      x: 100,
+      y: 200,
+      vx: 1.2,
+      vy: 0.8,
+      radius: 46,
+      color: const Color(0xFF00F5D4),
+    ),
+    ThoughtBubble(
+      id: '2',
+      text: 'Buy High-Magnesium',
+      x: 250,
+      y: 320,
+      vx: -0.9,
+      vy: 1.1,
+      radius: 42,
+      color: const Color(0xFFFFB703),
+    ),
+    ThoughtBubble(
+      id: '3',
+      text: 'Fix iOS Impeller Bug',
+      x: 180,
+      y: 460,
+      vx: 0.7,
+      vy: -1.3,
+      radius: 48,
+      color: const Color(0xFFFF0080),
+    ),
+    ThoughtBubble(
+      id: '4',
+      text: 'Call Marco for Startup',
+      x: 80,
+      y: 390,
+      vx: -1.1,
+      vy: -0.6,
+      radius: 44,
+      color: const Color(0xFF00BBF9),
+    ),
+  ];
+
+  final TextEditingController _input = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _physicsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 16),
+    )..addListener(_updateBubblePhysics)..repeat();
+  }
+
+  void _updateBubblePhysics() {
+    for (final b in _bubbles) {
+      b.x += b.vx;
+      b.y += b.vy;
+
+      // Friction
+      b.vx *= 0.995;
+      b.vy *= 0.995;
+
+      // Wall bounce
+      if (b.x < b.radius || b.x > 380 - b.radius) b.vx *= -1;
+      if (b.y < 120 + b.radius || b.y > 660 - b.radius) b.vy *= -1;
+    }
+    setState(() {});
+  }
+
+  void _popBubble(String id) {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _bubbles.removeWhere((b) => b.id == id);
+    });
+  }
+
+  void _addThought() {
+    if (_input.text.trim().isEmpty) return;
+    HapticFeedback.lightImpact();
+    final rand = math.Random();
+    final colors = [
+      const Color(0xFF00F5D4),
+      const Color(0xFFFF0080),
+      const Color(0xFF00BBF9),
+      const Color(0xFFFFB703),
+    ];
+    setState(() {
+      _bubbles.add(
+        ThoughtBubble(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: _input.text.trim(),
+          x: 150 + rand.nextDouble() * 80,
+          y: 250 + rand.nextDouble() * 100,
+          vx: (rand.nextDouble() - 0.5) * 3.0,
+          vy: (rand.nextDouble() - 0.5) * 3.0,
+          radius: 44,
+          color: colors[rand.nextInt(colors.length)],
+        ),
+      );
+      _input.clear();
+    });
+  }
+
+  @override
+  void dispose() {
+    _physicsController.dispose();
+    _input.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      bottom: false,
+      child: Stack(
+        children: [
+          // Header & Thought Input Field
+          Positioned(
+            top: 16,
+            left: 20,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'KINETIC VOID',
+                  style: TextStyle(
+                    letterSpacing: 2.5,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF00BBF9),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                const Text(
+                  'Thought Evaporator',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _input,
+                        style: const TextStyle(fontSize: 14, color: Colors.white),
+                        decoration: InputDecoration(
+                          hintText: 'Dump raw thought or task...',
+                          filled: true,
+                          fillColor: const Color(0xFF0F1626),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                        ),
+                        onSubmitted: (_) => _addThought(),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    GestureDetector(
+                      onTap: _addThought,
+                      child: Container(
+                        height: 48,
+                        width: 48,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF00BBF9), Color(0xFF00F5D4)],
+                          ),
+                        ),
+                        child: const Icon(CupertinoIcons.arrow_up, color: Colors.black, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Floating Physics Bubbles
+          ..._bubbles.map((b) {
+            return Positioned(
+              left: b.x - b.radius,
+              top: b.y - b.radius,
+              child: GestureDetector(
+                onTap: () => _popBubble(b.id),
+                onPanUpdate: (details) {
+                  b.x += details.delta.dx;
+                  b.y += details.delta.dy;
+                  b.vx = details.delta.dx * 0.4;
+                  b.vy = details.delta.dy * 0.4;
+                },
+                child: Container(
+                  width: b.radius * 2,
+                  height: b.radius * 2,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: b.color.withAlpha(45),
+                    border: Border.all(color: b.color, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: b.color.withAlpha(50),
+                        blurRadius: 18,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      b.text,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// ADD NODE MODAL SHEET
+// ---------------------------------------------------------------------------
+
+class AddOrbitalNodeModal extends StatefulWidget {
+  final Function(String, NodeCategory, double) onAdd;
+
+  const AddOrbitalNodeModal({super.key, required this.onAdd});
+
+  @override
+  State<AddOrbitalNodeModal> createState() => _AddOrbitalNodeModalState();
+}
+
+class _AddOrbitalNodeModalState extends State<AddOrbitalNodeModal> {
+  final TextEditingController _ctrl = TextEditingController();
+  NodeCategory _cat = NodeCategory.deepWork;
+  double _urgency = 0.8;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        top: 24,
+        left: 20,
+        right: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: const BoxDecoration(
+        color: Color(0xFF101625),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'SPAWN ORBITAL NODE',
+            style: TextStyle(
+              fontSize: 11,
+              letterSpacing: 1.5,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF00F5D4),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            style: const TextStyle(fontSize: 16, color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'Enter mission or habit name...',
+              filled: true,
+              fillColor: Colors.black26,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          const Text(
+            'ORBITAL CATEGORY',
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 1.2,
+              fontWeight: FontWeight.bold,
+              color: Colors.white38,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: NodeCategory.values.map((c) {
+              final isSel = _cat == c;
+              return ChoiceChip(
+                label: Text(c.name.toUpperCase()),
+                selected: isSel,
+                onSelected: (_) => setState(() => _cat = c),
+                selectedColor: const Color(0xFF00F5D4),
+                labelStyle: TextStyle(
+                  color: isSel ? Colors.black : Colors.white70,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Gravitational Urgency',
+                style: TextStyle(fontSize: 12, color: Colors.white70),
+              ),
               Text(
-                label.split(' ').last,
-                style: const TextStyle(fontSize: 10, color: Colors.white54),
+                '${(_urgency * 100).toInt()}%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF00F5D4),
+                ),
               ),
             ],
           ),
-        ),
+          Slider(
+            value: _urgency,
+            min: 0.1,
+            max: 1.0,
+            activeColor: const Color(0xFF00F5D4),
+            onChanged: (v) => setState(() => _urgency = v),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () {
+              if (_ctrl.text.trim().isNotEmpty) {
+                widget.onAdd(_ctrl.text.trim(), _cat, _urgency);
+                Navigator.pop(context);
+              }
+            },
+            child: Container(
+              height: 54,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(27),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF00F5D4), Color(0xFF00BBF9)],
+                ),
+              ),
+              child: const Center(
+                child: Text(
+                  'INJECT INTO GRAVITY MATRIX',
+                  style: TextStyle(
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1.2,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
