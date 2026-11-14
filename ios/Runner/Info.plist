@@ -7,7 +7,15 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Aether Pulse</string>
+	<string>VoxMind AI</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>VoxMind richiede l&apos;accesso al microfono per analizzare la voce durante le chiamate.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>VoxMind richiede il riconoscimento vocale per trascrivere le conversazioni.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

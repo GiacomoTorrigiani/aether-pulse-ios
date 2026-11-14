@@ -6,5 +6,6 @@ void main() {
     await tester.pumpWidget(const VoxMindApp());
     expect(find.text('DOMANDE SUGGERITE IN TEMPO REALE'), findsOneWidget);
     expect(find.text('Marco Rossi'), findsOneWidget);
+    expect(find.text('+ MIO CONTATTO'), findsOneWidget);
   });
 }
