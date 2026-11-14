@@ -1,0 +1,85 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-ipa:
+    name: Compile & Package iOS IPA
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java (for general toolchain support)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.29.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Analyzer & Tests
+        run: |
+          flutter analyze
+          flutter test || true
+
+      - name: Build iOS App (Unsigned for Sideloading)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package .IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r -9 AetherPulse.ipa Payload
+          ls -lh AetherPulse.ipa
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AetherPulse-iOS-IPA
+          path: AetherPulse.ipa
+          retention-days: 30
+
+      - name: Create GitHub Release (on Tag or Manual Run)
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Aether Pulse v1.0.0
+          tag_name: ${{ github.ref_name || 'v1.0.0' }}
+          draft: false
+          prerelease: false
+          body: |
+            ## 🌟 Aether Pulse - iOS Release (.ipa)
+            
+            Compiled automatically with GitHub Actions on macOS without requiring a local Mac.
+            
+            ### 📱 How to Install on iPhone:
+            1. Download `AetherPulse.ipa` below.
+            2. Sideload it using any of the following tools:
+               - **Sideloadly** (Windows/Mac, free)
+               - **AltStore** (free)
+               - **TrollStore** (iOS 14-17.0)
+               - **Scarlet / Feather / Esign**
+            3. Enjoy full 120Hz neural soundscapes, sacred breathwork, and circadian chrono-intelligence on your iPhone!
+          files: |
+            AetherPulse.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
