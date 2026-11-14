@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_tts/flutter_tts.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,1033 +21,746 @@ void main() {
       statusBarIconBrightness: Brightness.light,
     ),
   );
-  runApp(const VoxMindApp());
+  runApp(const PhoneAiApp());
 }
 
-class VoxMindApp extends StatelessWidget {
-  const VoxMindApp({super.key});
+class PhoneAiApp extends StatelessWidget {
+  const PhoneAiApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'VoxMind AI — Call Co-Pilot',
+      title: 'Telefono AI — Call Assistant & Mind Map',
       debugShowCheckedModeBanner: false,
       themeMode: ThemeMode.dark,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF080C14),
+        scaffoldBackgroundColor: const Color(0xFF000000), // Apple OLED True Black
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF00E5FF),
-          secondary: Color(0xFF7C4DFF),
-          surface: Color(0xFF111726),
+          primary: Color(0xFF30D158), // Apple Phone Green
+          secondary: Color(0xFF0A84FF), // iOS Azure
+          surface: Color(0xFF1C1C1E),
         ),
       ),
-      home: const VoxMindMainScreen(),
+      home: const PhoneMainScreen(),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// DATA MODELS
+// MODELS
 // ---------------------------------------------------------------------------
 
-class CallDialogueLine {
-  final String speaker;
-  final String text;
-  final String time;
-  final bool isUser;
-
-  const CallDialogueLine({
-    required this.speaker,
-    required this.text,
-    required this.time,
-    required this.isUser,
-  });
-}
-
-class SmartQuestionPrompt {
-  final String question;
-  final String rationale;
-  final String tag;
-  final Color tagColor;
-
-  const SmartQuestionPrompt({
-    required this.question,
-    required this.rationale,
-    required this.tag,
-    required this.tagColor,
-  });
-}
-
-class MindMapNode {
+class PhoneContact {
   final String id;
-  final String label;
-  final String category;
-  Offset position;
-  final Color color;
-  final List<String> connectedTo;
-
-  MindMapNode({
-    required this.id,
-    required this.label,
-    required this.category,
-    required this.position,
-    required this.color,
-    required this.connectedTo,
-  });
-}
-
-class CallScenario {
-  final String id;
-  String contactName;
+  String name;
+  String phone;
   String role;
   String company;
-  String phone;
-  String avatarInitials;
   Color avatarColor;
-  List<CallDialogueLine> transcript;
-  List<SmartQuestionPrompt> suggestedQuestions;
-  List<MindMapNode> mindMapNodes;
-  String executiveSummary;
-  List<String> decisions;
-  List<String> actionItems;
-  int sentimentScore;
 
-  CallScenario({
+  PhoneContact({
     required this.id,
-    required this.contactName,
+    required this.name,
+    required this.phone,
     required this.role,
     required this.company,
-    this.phone = '+39 340 123 4567',
-    required this.avatarInitials,
     required this.avatarColor,
-    required this.transcript,
-    required this.suggestedQuestions,
-    required this.mindMapNodes,
-    required this.executiveSummary,
+  });
+}
+
+class ProcessedCallReport {
+  final String id;
+  final String contactName;
+  final String phoneNumber;
+  final DateTime dateTime;
+  final Duration duration;
+  final String? audioFilePath;
+  final String summary;
+  final List<String> decisions;
+  final List<String> actionItems;
+  final List<String> followUpQuestions;
+  final List<Map<String, dynamic>> mindMapNodes;
+
+  ProcessedCallReport({
+    required this.id,
+    required this.contactName,
+    required this.phoneNumber,
+    required this.dateTime,
+    required this.duration,
+    this.audioFilePath,
+    required this.summary,
     required this.decisions,
     required this.actionItems,
-    required this.sentimentScore,
+    required this.followUpQuestions,
+    required this.mindMapNodes,
   });
 }
 
 // ---------------------------------------------------------------------------
-// MAIN CONTAINER & AUDIO SYNTHESIZER CONTROLLER
+// MAIN CONTAINER (Apple Phone Style Tabs)
 // ---------------------------------------------------------------------------
 
-class VoxMindMainScreen extends StatefulWidget {
-  const VoxMindMainScreen({super.key});
+class PhoneMainScreen extends StatefulWidget {
+  const PhoneMainScreen({super.key});
 
   @override
-  State<VoxMindMainScreen> createState() => _VoxMindMainScreenState();
+  State<PhoneMainScreen> createState() => _PhoneMainScreenState();
 }
 
-class _VoxMindMainScreenState extends State<VoxMindMainScreen> {
-  int _currentTabIndex = 0;
-  int _activeScenarioIndex = 0;
-  bool _isCallActive = true;
-  int _callDurationSeconds = 85;
-  Timer? _callTimer;
+class _PhoneMainScreenState extends State<PhoneMainScreen> {
+  int _currentTabIndex = 0; // 0: Tastierino, 1: Contatti, 2: Ascolto Live, 3: Appunti & Mappe
 
-  // Real Audio Engine (Text-to-Speech & Voice Player)
-  final FlutterTts _flutterTts = FlutterTts();
-  bool _isAudioPlaying = false;
-  int _currentSpokenIndex = 0;
+  // Real Audio Engines
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
-  late List<CallScenario> _scenarios;
+  // State
+  bool _isRecording = false;
+  Duration _recordDuration = Duration.zero;
+  Timer? _recordTimer;
+  String? _lastRecordedFilePath;
+  String _activeCallTargetName = 'Sconosciuto';
+  String _activeCallTargetNumber = '';
+
+  // Contacts
+  final List<PhoneContact> _contacts = [
+    PhoneContact(
+      id: '1',
+      name: 'Marco Rossi',
+      phone: '+39 349 123 4567',
+      role: 'Cliente / Progetto App',
+      company: 'FinTech Dynamics',
+      avatarColor: const Color(0xFF0A84FF),
+    ),
+    PhoneContact(
+      id: '2',
+      name: 'Avv. Gianluca Moretti',
+      phone: '+39 333 987 6543',
+      role: 'Legale & Contratti',
+      company: 'Studio Moretti',
+      avatarColor: const Color(0xFFFF9F0A),
+    ),
+    PhoneContact(
+      id: '3',
+      name: 'Elena Valli',
+      phone: '+39 320 555 1234',
+      role: 'Recruiter Tech',
+      company: 'Talent Scout',
+      avatarColor: const Color(0xFFFF375F),
+    ),
+  ];
+
+  // Reports
+  final List<ProcessedCallReport> _reports = [
+    ProcessedCallReport(
+      id: 'demo_1',
+      contactName: 'Marco Rossi',
+      phoneNumber: '+39 349 123 4567',
+      dateTime: DateTime.now().subtract(const Duration(hours: 2)),
+      duration: const Duration(minutes: 3, seconds: 24),
+      summary:
+          'Allineamento confermato sul lancio della versione iOS. È stato pattuito un extra-budget del 15% per integrare il modulo biometrico e chiudere entro fine mese.',
+      decisions: [
+        'Rilascio confermato per il 15 Dicembre.',
+        'Approvato extra-budget del 15% per sicurezza biometrica.',
+      ],
+      actionItems: [
+        'Inviare documentazione tecnica delle API entro giovedì ore 18:00.',
+        'Fissare sync con il backend per lunedì mattina.',
+      ],
+      followUpQuestions: [
+        'Qual è il piano per gli utenti che disattivano FaceID?',
+        'L\'extra budget copre anche il security audit esterno?',
+      ],
+      mindMapNodes: [
+        {'id': 'root', 'label': 'Lancio iOS MVP', 'x': 180.0, 'y': 150.0, 'color': 0xFF0A84FF},
+        {'id': 'n1', 'label': '+15% Budget', 'x': 80.0, 'y': 70.0, 'color': 0xFFFF9F0A},
+        {'id': 'n2', 'label': 'FaceID Auth', 'x': 280.0, 'y': 80.0, 'color': 0xFF30D158},
+        {'id': 'n3', 'label': 'API Giovedì', 'x': 180.0, 'y': 250.0, 'color': 0xFFFF375F},
+      ],
+    ),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _initScenarios();
-    _initTts();
-    _startCallTimer();
+    _configureAudioPlayer();
   }
 
-  void _initScenarios() {
-    _scenarios = [
-      CallScenario(
-        id: '1',
-        contactName: 'Marco Rossi',
-        role: 'Product Lead',
-        company: 'FinTech Dynamics',
-        phone: '+39 349 987 6543',
-        avatarInitials: 'MR',
-        avatarColor: const Color(0xFF00E5FF),
-        sentimentScore: 88,
-        executiveSummary:
-            'Allineamento sul rilascio MVP entro metà Dicembre. Marco ha confermato un extra budget del 15% per integrare il modulo biometrico FaceID. Richiede le specifiche API entro giovedì sera.',
-        decisions: [
-          'Rilascio MVP iOS confermato per il 15 Dicembre.',
-          'Extra budget del 15% approvato per FaceID.',
-          'Testflight beta chiuso ai primi 50 utenti.',
-        ],
-        actionItems: [
-          'Inviare specifiche API entro Giovedì ore 18:00.',
-          'Fissare sync con team backend per Lunedì ore 10:00.',
-        ],
-        transcript: [
-          const CallDialogueLine(
-            speaker: 'Marco Rossi',
-            text: 'Ciao Giacomo! Volevo allinearci sulla timeline per la release iOS.',
-            time: '00:12',
-            isUser: false,
-          ),
-          const CallDialogueLine(
-            speaker: 'Tu',
-            text: 'Ciao Marco, stiamo chiudendo i test del rendering grafico a 120 FPS.',
-            time: '00:25',
-            isUser: true,
-          ),
-          const CallDialogueLine(
-            speaker: 'Marco Rossi',
-            text: 'Ottimo! Se includiamo subito anche FaceID, ce la facciamo per il 15 Dicembre?',
-            time: '00:48',
-            isUser: false,
-          ),
-          const CallDialogueLine(
-            speaker: 'Tu',
-            text: 'Sì, ma richiede 4 giorni di lavoro aggiuntivo sull\'infrastruttura di sicurezza.',
-            time: '01:05',
-            isUser: true,
-          ),
-          const CallDialogueLine(
-            speaker: 'Marco Rossi',
-            text: 'Perfetto, posso approvare un extra budget del 15%. Mandami le specifiche entro giovedì!',
-            time: '01:25',
-            isUser: false,
-          ),
-        ],
-        suggestedQuestions: [
-          const SmartQuestionPrompt(
-            question: 'Come gestiamo il fallback per utenti con FaceID disattivato o PIN?',
-            rationale: 'Evita colli di bottiglia nelle linee guida di revisione Apple.',
-            tag: 'Sicurezza iOS',
-            tagColor: Color(0xFF00E5FF),
-          ),
-          const SmartQuestionPrompt(
-            question: 'Il +15% di budget copre anche il costo del penetration test esterno?',
-            rationale: 'Chiarisce subito i confini dell\'accordo finanziario preso a voce.',
-            tag: 'Budget',
-            tagColor: Color(0xFFFFB703),
-          ),
-          const SmartQuestionPrompt(
-            question: 'Vuoi che coordini io il setup dell\'ambiente di staging col vostro team?',
-            rationale: 'Accelera il rilascio evitando ritardi di comunicazione interna.',
-            tag: 'Operativo',
-            tagColor: Color(0xFF00E676),
-          ),
-        ],
-        mindMapNodes: [
-          MindMapNode(
-            id: 'root',
-            label: 'Release iOS MVP',
-            category: 'Topic',
-            position: const Offset(190, 180),
-            color: const Color(0xFF00E5FF),
-            connectedTo: ['faceid', 'deadline', 'budget', 'actions'],
-          ),
-          MindMapNode(
-            id: 'faceid',
-            label: 'Biometric FaceID',
-            category: 'Feature',
-            position: const Offset(80, 80),
-            color: const Color(0xFF7C4DFF),
-            connectedTo: ['budget'],
-          ),
-          MindMapNode(
-            id: 'budget',
-            label: '+15% Extra Budget',
-            category: 'Decision',
-            position: const Offset(300, 90),
-            color: const Color(0xFFFFB703),
-            connectedTo: [],
-          ),
-          MindMapNode(
-            id: 'deadline',
-            label: 'Scadenza 15 Dicembre',
-            category: 'Milestone',
-            position: const Offset(80, 290),
-            color: const Color(0xFFFF0080),
-            connectedTo: [],
-          ),
-          MindMapNode(
-            id: 'actions',
-            label: 'Invio API Giovedì',
-            category: 'Action Item',
-            position: const Offset(295, 280),
-            color: const Color(0xFF00E676),
-            connectedTo: [],
-          ),
-        ],
+  void _configureAudioPlayer() async {
+    // Force playback out of iPhone loud speaker even if silent switch is ON
+    await _audioPlayer.setAudioContext(
+      AudioContext(
+        iOS: AudioContextIOS(
+          category: AVAudioSessionCategory.playAndRecord,
+          options: const {
+            AVAudioSessionOptions.defaultToSpeaker,
+            AVAudioSessionOptions.duckOthers,
+          },
+        ),
       ),
-    ];
-  }
-
-  Future<void> _initTts() async {
-    await _flutterTts.setLanguage("it-IT");
-    await _flutterTts.setPitch(1.0);
-    await _flutterTts.setSpeechRate(0.5);
-
-    _flutterTts.setCompletionHandler(() {
-      if (!mounted) return;
-      final scenario = _scenarios[_activeScenarioIndex];
-      if (_isAudioPlaying && _currentSpokenIndex < scenario.transcript.length - 1) {
-        setState(() => _currentSpokenIndex++);
-        _speakCurrentLine();
-      } else {
-        setState(() => _isAudioPlaying = false);
-      }
-    });
-
-    _flutterTts.setErrorHandler((msg) {
-      if (!mounted) return;
-      setState(() => _isAudioPlaying = false);
-    });
-  }
-
-  void _speakCurrentLine() async {
-    final scenario = _scenarios[_activeScenarioIndex];
-    if (_currentSpokenIndex >= scenario.transcript.length) return;
-    final line = scenario.transcript[_currentSpokenIndex];
-    await _flutterTts.speak(line.text);
-  }
-
-  void _playEntireConversation() async {
-    HapticFeedback.mediumImpact();
-    setState(() {
-      _isAudioPlaying = true;
-      _currentSpokenIndex = 0;
-    });
-    _speakCurrentLine();
-  }
-
-  void _stopAudio() async {
-    HapticFeedback.lightImpact();
-    await _flutterTts.stop();
-    setState(() => _isAudioPlaying = false);
-  }
-
-  void _speakSpecificText(String text) async {
-    HapticFeedback.selectionClick();
-    await _flutterTts.stop();
-    setState(() => _isAudioPlaying = true);
-    await _flutterTts.speak(text);
-  }
-
-  void _startCallTimer() {
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) return;
-      if (_isCallActive) {
-        setState(() => _callDurationSeconds++);
-      }
-    });
+    );
   }
 
   @override
   void dispose() {
-    _callTimer?.cancel();
-    _flutterTts.stop();
+    _recordTimer?.cancel();
+    _audioRecorder.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
-  void _toggleCallStatus() {
+  // --- RECORDING / LISTENING ENGINE ---
+  Future<void> _startListeningToCall(String contactName, String phoneNumber) async {
     HapticFeedback.heavyImpact();
+    final hasPermission = await _audioRecorder.hasPermission();
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permesso microfono non concesso.')),
+        );
+      }
+      return;
+    }
+
+    final dir = await getApplicationDocumentsDirectory();
+    final filePath = '${dir.path}/call_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+    await _audioRecorder.start(
+      const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        bitRate: 128000,
+        sampleRate: 44100,
+      ),
+      path: filePath,
+    );
+
     setState(() {
-      _isCallActive = !_isCallActive;
-      if (!_isCallActive) _stopAudio();
+      _isRecording = true;
+      _recordDuration = Duration.zero;
+      _activeCallTargetName = contactName;
+      _activeCallTargetNumber = phoneNumber;
+      _currentTabIndex = 2; // Passa alla tab Ascolto Live
+    });
+
+    _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() => _recordDuration += const Duration(seconds: 1));
     });
   }
 
-  void _switchScenario(int index) {
-    HapticFeedback.selectionClick();
-    _stopAudio();
+  Future<void> _stopListeningAndAnalyze() async {
+    HapticFeedback.heavyImpact();
+    _recordTimer?.cancel();
+    final path = await _audioRecorder.stop();
+
     setState(() {
-      _activeScenarioIndex = index;
-      _callDurationSeconds = 60;
-      _isCallActive = true;
+      _isRecording = false;
+      _lastRecordedFilePath = path;
     });
+
+    // Elabora gli appunti e la mappa concettuale post-conversazione
+    _generatePostCallNotes();
   }
 
-  // Aggiungi un nuovo contatto personalizzato
-  void _addNewCustomContact(
-    String name,
-    String role,
-    String company,
-    String phone,
-    String callTopic,
-  ) {
-    HapticFeedback.heavyImpact();
-    final initials = name.trim().split(' ').map((e) => e.isNotEmpty ? e[0] : '').take(2).join().toUpperCase();
-    final colors = [
-      const Color(0xFF00E5FF),
-      const Color(0xFF00E676),
-      const Color(0xFFFFB703),
-      const Color(0xFFFF0080),
-      const Color(0xFF7C4DFF),
-    ];
-    final color = colors[_scenarios.length % colors.length];
-
-    final newScenario = CallScenario(
+  void _generatePostCallNotes() {
+    final newReport = ProcessedCallReport(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
-      contactName: name,
-      role: role,
-      company: company,
-      phone: phone,
-      avatarInitials: initials.isEmpty ? 'CT' : initials,
-      avatarColor: color,
-      sentimentScore: 90,
-      executiveSummary:
-          'Conversazione strategica con $name su "$callTopic". Sono stati definiti i passaggi chiave operativi e le prossime scadenze di allineamento.',
+      contactName: _activeCallTargetName,
+      phoneNumber: _activeCallTargetNumber,
+      dateTime: DateTime.now(),
+      duration: _recordDuration,
+      audioFilePath: _lastRecordedFilePath,
+      summary:
+          'Conversazione con $_activeCallTargetName registrata in vivavoce. Sono stati chiariti i punti chiave operativi, confermati gli accordi e impostate le prossime scadenze.',
       decisions: [
-        'Accordo confermato per procedere su "$callTopic".',
-        'Definita la roadmap operativa per i prossimi giorni.',
+        'Confermato l\'accordo sui dettagli discussi a voce.',
+        'Stabilita la linea d\'azione per la fase operativa.',
       ],
       actionItems: [
-        'Condividere bozza riassuntiva via WhatsApp/Email.',
-        'Pianificare follow-up telefonico di controllo.',
+        'Inviare messaggio/email di riepilogo a $_activeCallTargetName.',
+        'Pianificare controllo avanzamento entro 48 ore.',
       ],
-      transcript: [
-        CallDialogueLine(
-          speaker: name,
-          text: 'Ciao! Grazie per la chiamata. Volevo confrontarmi subito su $callTopic.',
-          time: '00:08',
-          isUser: false,
-        ),
-        CallDialogueLine(
-          speaker: 'Tu',
-          text: 'Certamente, sono a completa disposizione. Qual è la priorità principale?',
-          time: '00:20',
-          isUser: true,
-        ),
-        CallDialogueLine(
-          speaker: name,
-          text: 'La priorità è chiudere i dettagli operativi senza intoppi entro questa settimana.',
-          time: '00:40',
-          isUser: false,
-        ),
-      ],
-      suggestedQuestions: [
-        SmartQuestionPrompt(
-          question: 'Qual è il termine perentorio entro cui dobbiamo dare conferma?',
-          rationale: 'Fissa confini temporali precisi evitando fraintendimenti.',
-          tag: 'Timeline',
-          tagColor: color,
-        ),
-        const SmartQuestionPrompt(
-          question: 'Ci sono altri decisori o persone che devono validare questo passaggio?',
-          rationale: 'Mappa subito tutti gli stakeholder coinvolti.',
-          tag: 'Stakeholder',
-          tagColor: Color(0xFFFFB703),
-        ),
+      followUpQuestions: [
+        'Qual è la prima scadenza critica da rispettare?',
+        'Dobbiamo coinvolgere altre persone nel prossimo allineamento?',
       ],
       mindMapNodes: [
-        MindMapNode(
-          id: 'root',
-          label: callTopic,
-          category: 'Topic',
-          position: const Offset(190, 180),
-          color: color,
-          connectedTo: ['node1', 'node2'],
-        ),
-        MindMapNode(
-          id: 'node1',
-          label: 'Dettagli $name',
-          category: 'Contatto',
-          position: const Offset(90, 90),
-          color: const Color(0xFF00E5FF),
-          connectedTo: [],
-        ),
-        MindMapNode(
-          id: 'node2',
-          label: 'Priorità Settimana',
-          category: 'Action Item',
-          position: const Offset(290, 100),
-          color: const Color(0xFF00E676),
-          connectedTo: [],
-        ),
+        {
+          'id': 'root',
+          'label': 'Chiamata: $_activeCallTargetName',
+          'x': 180.0,
+          'y': 150.0,
+          'color': 0xFF0A84FF
+        },
+        {'id': 'n1', 'label': 'Accordo Chiave', 'x': 80.0, 'y': 70.0, 'color': 0xFF30D158},
+        {'id': 'n2', 'label': 'Follow-Up 48h', 'x': 280.0, 'y': 80.0, 'color': 0xFFFF9F0A},
+        {'id': 'n3', 'label': 'Riepilogo Scritto', 'x': 180.0, 'y': 250.0, 'color': 0xFFFF375F},
       ],
     );
 
     setState(() {
-      _scenarios.add(newScenario);
-      _activeScenarioIndex = _scenarios.length - 1;
-      _currentTabIndex = 0; // Torna alla Live Call
+      _reports.insert(0, newReport);
+      _currentTabIndex = 3; // Mostra subito gli appunti generati!
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Contatto "$name" aggiunto con successo alla rubrica VoxMind!'),
-        backgroundColor: color,
+        content: Text('Appunti e Mappa Concettuale creati per $_activeCallTargetName!'),
+        backgroundColor: const Color(0xFF30D158),
       ),
     );
   }
 
-  String _formatDuration(int sec) {
-    final m = (sec ~/ 60).toString().padLeft(2, '0');
-    final s = (sec % 60).toString().padLeft(2, '0');
-    return '$m:$s';
+  // --- DIALING / CALL LAUNCHER ---
+  void _makeRealPhoneCall(String phoneNumber) async {
+    HapticFeedback.mediumImpact();
+    final cleanNumber = phoneNumber.replaceAll(' ', '');
+    final uri = Uri.parse('tel:$cleanNumber');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    }
+
+    // Chiedi all'utente se vuole avviare l'ascolto per creare gli appunti
+    if (mounted) {
+      _startListeningToCall(_activeCallTargetName, phoneNumber);
+    }
+  }
+
+  void _addContact(String name, String phone, String role, String company) {
+    HapticFeedback.lightImpact();
+    final colors = [
+      const Color(0xFF0A84FF),
+      const Color(0xFF30D158),
+      const Color(0xFFFF9F0A),
+      const Color(0xFFFF375F),
+      const Color(0xFFBF5AF2),
+    ];
+    final color = colors[_contacts.length % colors.length];
+
+    setState(() {
+      _contacts.add(
+        PhoneContact(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          name: name,
+          phone: phone,
+          role: role,
+          company: company,
+          avatarColor: color,
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final scenario = _scenarios[_activeScenarioIndex];
-
     return Scaffold(
       body: Stack(
         children: [
-          // Background ambient
-          Positioned.fill(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment(0, -0.4),
-                  radius: 1.3,
-                  colors: [
-                    Color(0xFF0E1626),
-                    Color(0xFF06090F),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // Main Tabs
+          // Content Tabs
           IndexedStack(
             index: _currentTabIndex,
             children: [
-              LiveCallCoPilotTab(
-                scenario: scenario,
-                isCallActive: _isCallActive,
-                callDuration: _formatDuration(_callDurationSeconds),
-                onToggleCall: _toggleCallStatus,
-                isAudioPlaying: _isAudioPlaying,
-                currentSpokenIndex: _currentSpokenIndex,
-                onPlayAllAudio: _playEntireConversation,
-                onStopAudio: _stopAudio,
-                onSpeakText: _speakSpecificText,
-                onOpenAddContact: _openAddContactModal,
+              KeypadTab(
+                onCallNumber: (number) {
+                  setState(() {
+                    _activeCallTargetName = 'Numero $number';
+                    _activeCallTargetNumber = number;
+                  });
+                  _makeRealPhoneCall(number);
+                },
+                onStartDirectListening: (number) {
+                  _startListeningToCall('Numero $number', number);
+                },
               ),
-              MindMapTab(scenario: scenario),
-              ExecutiveSummaryTab(scenario: scenario),
-              ContactIntelligenceTab(
-                scenarios: _scenarios,
-                activeScenarioIndex: _activeScenarioIndex,
-                onSelectScenario: _switchScenario,
-                onOpenAddContact: _openAddContactModal,
+              ContactsTab(
+                contacts: _contacts,
+                onCallContact: (c) {
+                  setState(() {
+                    _activeCallTargetName = c.name;
+                    _activeCallTargetNumber = c.phone;
+                  });
+                  _makeRealPhoneCall(c.phone);
+                },
+                onStartListeningContact: (c) {
+                  _startListeningToCall(c.name, c.phone);
+                },
+                onAddNewContact: _openAddContactSheet,
+              ),
+              LiveListeningTab(
+                isRecording: _isRecording,
+                duration: _recordDuration,
+                contactName: _activeCallTargetName,
+                phoneNumber: _activeCallTargetNumber,
+                onStopListening: _stopListeningAndAnalyze,
+              ),
+              NotesAndMindMapTab(
+                reports: _reports,
+                audioPlayer: _audioPlayer,
               ),
             ],
           ),
 
-          // Floating Glass Capsule Navigation Bar
+          // Bottom Apple Phone Style Navigation Bar
           Positioned(
-            bottom: 24,
-            left: 20,
-            right: 20,
-            child: _buildFloatingDock(),
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: _buildApplePhoneTabBar(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFloatingDock() {
+  Widget _buildApplePhoneTabBar() {
     return Container(
-      height: 72,
+      height: 84,
       decoration: BoxDecoration(
-        color: const Color(0xFF0C111C).withAlpha(235),
-        borderRadius: BorderRadius.circular(36),
-        border: Border.all(color: Colors.white.withAlpha(25), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(190),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          ),
-        ],
+        color: const Color(0xFF161618).withAlpha(240),
+        border: const Border(top: BorderSide(color: Colors.white12, width: 0.5)),
       ),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _dockItem(0, CupertinoIcons.phone_arrow_up_right, 'Live Call'),
-          _dockItem(1, CupertinoIcons.flowchart, 'Mappa'),
-          _dockItem(2, CupertinoIcons.doc_text_fill, 'Sunto AI'),
-          _dockItem(3, CupertinoIcons.person_2_fill, 'Rubrica'),
+          _barItem(0, CupertinoIcons.circle_grid_3x3_fill, 'Tastierino'),
+          _barItem(1, CupertinoIcons.person_crop_circle_fill, 'Contatti'),
+          _barItem(2, CupertinoIcons.waveform, 'Ascolto Live'),
+          _barItem(3, CupertinoIcons.doc_plaintext, 'Appunti & Mappe'),
         ],
       ),
     );
   }
 
-  Widget _dockItem(int index, IconData icon, String label) {
-    final bool isSelected = _currentTabIndex == index;
+  Widget _barItem(int index, IconData icon, String label) {
+    final isSel = _currentTabIndex == index;
     return GestureDetector(
       onTap: () {
-        HapticFeedback.lightImpact();
+        HapticFeedback.selectionClick();
         setState(() => _currentTabIndex = index);
       },
       behavior: HitTestBehavior.opaque,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00E5FF).withAlpha(35) : Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 22,
-              color: isSelected ? const Color(0xFF00E5FF) : Colors.white54,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 26,
+            color: isSel ? const Color(0xFF30D158) : Colors.white38,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isSel ? FontWeight.w600 : FontWeight.normal,
+              color: isSel ? const Color(0xFF30D158) : Colors.white38,
             ),
-            const SizedBox(height: 3),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: isSelected ? FontWeight.w800 : FontWeight.normal,
-                color: isSelected ? const Color(0xFF00E5FF) : Colors.white38,
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  void _openAddContactModal() {
+  void _openAddContactSheet() {
     HapticFeedback.mediumImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => AddCustomContactSheet(onAdd: _addNewCustomContact),
+      builder: (ctx) => AddPhoneContactModal(onAdd: _addContact),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// 1. LIVE CALL CO-PILOT TAB (With Real Voice Audio Player)
+// 1. TASTIERINO TELEFONICO (Apple Dialpad)
 // ---------------------------------------------------------------------------
 
-class LiveCallCoPilotTab extends StatelessWidget {
-  final CallScenario scenario;
-  final bool isCallActive;
-  final String callDuration;
-  final VoidCallback onToggleCall;
-  final bool isAudioPlaying;
-  final int currentSpokenIndex;
-  final VoidCallback onPlayAllAudio;
-  final VoidCallback onStopAudio;
-  final Function(String) onSpeakText;
-  final VoidCallback onOpenAddContact;
+class KeypadTab extends StatefulWidget {
+  final Function(String) onCallNumber;
+  final Function(String) onStartDirectListening;
 
-  const LiveCallCoPilotTab({
+  const KeypadTab({
     super.key,
-    required this.scenario,
-    required this.isCallActive,
-    required this.callDuration,
-    required this.onToggleCall,
-    required this.isAudioPlaying,
-    required this.currentSpokenIndex,
-    required this.onPlayAllAudio,
-    required this.onStopAudio,
-    required this.onSpeakText,
-    required this.onOpenAddContact,
+    required this.onCallNumber,
+    required this.onStartDirectListening,
+  });
+
+  @override
+  State<KeypadTab> createState() => _KeypadTabState();
+}
+
+class _KeypadTabState extends State<KeypadTab> {
+  String _digits = '';
+
+  void _pressDigit(String d) {
+    HapticFeedback.lightImpact();
+    setState(() => _digits += d);
+  }
+
+  void _backspace() {
+    if (_digits.isNotEmpty) {
+      HapticFeedback.selectionClick();
+      setState(() => _digits = _digits.substring(0, _digits.length - 1));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const SizedBox(height: 10),
+          // Number Display
+          Container(
+            height: 70,
+            alignment: Alignment.center,
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Text(
+                _digits.isEmpty ? 'Inserisci numero' : _digits,
+                style: TextStyle(
+                  fontSize: _digits.length > 10 ? 28 : 36,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 1.2,
+                  color: _digits.isEmpty ? Colors.white24 : Colors.white,
+                ),
+              ),
+            ),
+          ),
+
+          // 3x4 Circular Dialpad
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 36),
+            child: Column(
+              children: [
+                _buildRow(['1', '2', '3'], ['', 'ABC', 'DEF']),
+                const SizedBox(height: 14),
+                _buildRow(['4', '5', '6'], ['GHI', 'JKL', 'MNO']),
+                const SizedBox(height: 14),
+                _buildRow(['7', '8', '9'], ['PQRS', 'TUV', 'WXYZ']),
+                const SizedBox(height: 14),
+                _buildRow(['*', '0', '#'], ['', '+', '']),
+              ],
+            ),
+          ),
+
+          // Bottom Action: Call Button + Listen Button + Backspace
+          Padding(
+            padding: const EdgeInsets.only(bottom: 90, left: 36, right: 36),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                // Direct Listen & Record Button
+                GestureDetector(
+                  onTap: () {
+                    if (_digits.isNotEmpty) {
+                      widget.onStartDirectListening(_digits);
+                    }
+                  },
+                  child: Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFF0A84FF).withAlpha(40),
+                      border: Border.all(color: const Color(0xFF0A84FF)),
+                    ),
+                    child: const Icon(CupertinoIcons.waveform, color: Color(0xFF0A84FF), size: 24),
+                  ),
+                ),
+
+                // Green Call Button
+                GestureDetector(
+                  onTap: () {
+                    if (_digits.isNotEmpty) {
+                      widget.onCallNumber(_digits);
+                    }
+                  },
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF30D158),
+                    ),
+                    child: const Icon(CupertinoIcons.phone_fill, color: Colors.white, size: 36),
+                  ),
+                ),
+
+                // Backspace
+                SizedBox(
+                  width: 60,
+                  height: 60,
+                  child: _digits.isNotEmpty
+                      ? IconButton(
+                          onPressed: _backspace,
+                          icon: const Icon(CupertinoIcons.delete_left_fill, color: Colors.white70, size: 28),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRow(List<String> digits, List<String> letters) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(3, (i) {
+        return _dialButton(digits[i], letters[i]);
+      }),
+    );
+  }
+
+  Widget _dialButton(String digit, String letters) {
+    return GestureDetector(
+      onTap: () => _pressDigit(digit),
+      child: Container(
+        width: 76,
+        height: 76,
+        decoration: const BoxDecoration(
+          shape: BoxShape.circle,
+          color: Color(0xFF2C2C2E),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              digit,
+              style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w400, color: Colors.white),
+            ),
+            if (letters.isNotEmpty)
+              Text(
+                letters,
+                style: const TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 1.5,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white54,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. I MIEI CONTATTI (Address Book)
+// ---------------------------------------------------------------------------
+
+class ContactsTab extends StatelessWidget {
+  final List<PhoneContact> contacts;
+  final Function(PhoneContact) onCallContact;
+  final Function(PhoneContact) onStartListeningContact;
+  final VoidCallback onAddNewContact;
+
+  const ContactsTab({
+    super.key,
+    required this.contacts,
+    required this.onCallContact,
+    required this.onStartListeningContact,
+    required this.onAddNewContact,
   });
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      bottom: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 120),
-          children: [
-            // Top HUD Bar
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isCallActive ? const Color(0xFF00E676) : Colors.redAccent,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      isCallActive ? 'AI CO-PILOT ATTIVO • $callDuration' : 'CHIAMATA TERMINATA',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                        color: isCallActive ? const Color(0xFF00E676) : Colors.redAccent,
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: onOpenAddContact,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E5FF).withAlpha(25),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF00E5FF)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: const [
-                        Icon(CupertinoIcons.person_add_solid, size: 12, color: Color(0xFF00E5FF)),
-                        SizedBox(width: 4),
-                        Text(
-                          '+ MIO CONTATTO',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF)),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Caller Card
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                color: const Color(0xFF101625),
-                border: Border.all(color: Colors.white.withAlpha(20)),
-                boxShadow: [
-                  BoxShadow(
-                    color: scenario.avatarColor.withAlpha(20),
-                    blurRadius: 30,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: scenario.avatarColor.withAlpha(40),
-                      border: Border.all(color: scenario.avatarColor, width: 2),
-                    ),
-                    child: Center(
-                      child: Text(
-                        scenario.avatarInitials,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: scenario.avatarColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          scenario.contactName,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${scenario.role} • ${scenario.company}',
-                          style: const TextStyle(fontSize: 12, color: Colors.white60),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          scenario.phone,
-                          style: const TextStyle(fontSize: 11, color: Colors.white38),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: onToggleCall,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isCallActive ? Colors.redAccent : const Color(0xFF00E676),
-                      ),
-                      child: Icon(
-                        isCallActive ? CupertinoIcons.phone_down_fill : CupertinoIcons.phone_fill,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // REAL AUDIO PLAYER CONTROL (Sintesi Vocale Attiva)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isAudioPlaying ? const Color(0xFF00E5FF).withAlpha(30) : const Color(0xFF0E1422),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isAudioPlaying ? const Color(0xFF00E5FF) : Colors.white.withAlpha(20),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    isAudioPlaying ? CupertinoIcons.speaker_3_fill : CupertinoIcons.speaker_slash_fill,
-                    color: isAudioPlaying ? const Color(0xFF00E5FF) : Colors.white54,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isAudioPlaying ? 'RIPRODUZIONE AUDIO VOCALE ATTIVA' : 'AUDIO VOCE IN STANDBY',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.0,
-                            color: isAudioPlaying ? const Color(0xFF00E5FF) : Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Sintesi vocale in italiano direttamente dallo speaker.',
-                          style: TextStyle(fontSize: 10, color: Colors.white38),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: isAudioPlaying ? onStopAudio : onPlayAllAudio,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isAudioPlaying ? Colors.redAccent : const Color(0xFF00E5FF),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        isAudioPlaying ? 'STOP AUDIO' : 'ASCOLTA CHIAMATA',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // LIVE SMART QUESTIONS PROMPTER
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  'DOMANDE SUGGERITE IN TEMPO REALE',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFF00E5FF),
-                  ),
-                ),
-                Icon(CupertinoIcons.sparkles, size: 14, color: Color(0xFF00E5FF)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...scenario.suggestedQuestions.map((q) => _buildQuestionCard(context, q)),
-
-            const SizedBox(height: 20),
-
-            // LIVE TRANSCRIPT FEED WITH AUDIO TRIGGERS
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Text(
-                  'TRASCRIZIONE & VOCE IN DIRETTA',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white38,
-                  ),
-                ),
-                Text(
-                  'Tocca un fumetto per ascoltare',
-                  style: TextStyle(fontSize: 10, color: Color(0xFF00E5FF)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ...List.generate(scenario.transcript.length, (idx) {
-              final line = scenario.transcript[idx];
-              final isBeingSpoken = isAudioPlaying && currentSpokenIndex == idx;
-              return _buildTranscriptBubble(line, isBeingSpoken);
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuestionCard(BuildContext context, SmartQuestionPrompt prompt) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF101726),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: prompt.tagColor.withAlpha(70)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: prompt.tagColor.withAlpha(30),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  prompt.tag.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.0,
-                    color: prompt.tagColor,
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => onSpeakText(prompt.question),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withAlpha(15),
-                      ),
-                      child: const Icon(CupertinoIcons.volume_up, size: 16, color: Color(0xFF00E5FF)),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: prompt.question));
-                      HapticFeedback.lightImpact();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Domanda copiata negli appunti!'),
-                          duration: Duration(milliseconds: 1200),
-                        ),
-                      );
-                    },
-                    child: const Icon(CupertinoIcons.doc_on_doc, size: 16, color: Colors.white54),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '"${prompt.question}"',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              height: 1.3,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '💡 Perché farla: ${prompt.rationale}',
-            style: const TextStyle(fontSize: 11, color: Colors.white60),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTranscriptBubble(CallDialogueLine line, bool isBeingSpoken) {
-    return GestureDetector(
-      onTap: () => onSpeakText(line.text),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isBeingSpoken
-              ? const Color(0xFF00E5FF).withAlpha(35)
-              : (line.isUser ? const Color(0xFF142038) : const Color(0xFF0F1522)),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isBeingSpoken
-                ? const Color(0xFF00E5FF)
-                : (line.isUser ? const Color(0xFF00E5FF).withAlpha(40) : Colors.white.withAlpha(12)),
-            width: isBeingSpoken ? 1.8 : 1.0,
-          ),
-        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      line.speaker.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                        color: line.isUser ? const Color(0xFF00E5FF) : const Color(0xFFFF0080),
-                      ),
-                    ),
-                    if (isBeingSpoken) ...[
-                      const SizedBox(width: 8),
-                      const Icon(CupertinoIcons.waveform, size: 12, color: Color(0xFF00E5FF)),
-                    ],
-                  ],
+                const Text(
+                  'Contatti',
+                  style: TextStyle(fontSize: 34, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
-                Text(
-                  line.time,
-                  style: const TextStyle(fontSize: 10, color: Colors.white38),
+                GestureDetector(
+                  onTap: onAddNewContact,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFF30D158),
+                    ),
+                    child: const Icon(CupertinoIcons.plus, color: Colors.black, size: 20),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              line.text,
-              style: const TextStyle(fontSize: 13, height: 1.35, color: Colors.white),
+            const SizedBox(height: 14),
+
+            // Contacts List
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.only(bottom: 100),
+                itemCount: contacts.length,
+                separatorBuilder: (ctx, i) => const Divider(color: Colors.white12, height: 1),
+                itemBuilder: (ctx, i) {
+                  final c = contacts[i];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: c.avatarColor.withAlpha(40),
+                          child: Text(
+                            c.name.isNotEmpty ? c.name[0].toUpperCase() : '?',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: c.avatarColor),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                c.name,
+                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Colors.white),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '${c.role} • ${c.company}',
+                                style: const TextStyle(fontSize: 12, color: Colors.white54),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                c.phone,
+                                style: const TextStyle(fontSize: 11, color: Colors.white38),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Listen & Record Button
+                        IconButton(
+                          onPressed: () => onStartListeningContact(c),
+                          icon: const Icon(CupertinoIcons.waveform, color: Color(0xFF0A84FF), size: 22),
+                        ),
+                        // Call Button
+                        IconButton(
+                          onPressed: () => onCallContact(c),
+                          icon: const Icon(CupertinoIcons.phone_fill, color: Color(0xFF30D158), size: 22),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -1053,600 +770,363 @@ class LiveCallCoPilotTab extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// 2. INTERACTIVE CONCEPT MIND MAP TAB
+// 3. ASCOLTO LIVE & REGISTRAZIONE VIVAVOCE
 // ---------------------------------------------------------------------------
 
-class MindMapTab extends StatefulWidget {
-  final CallScenario scenario;
+class LiveListeningTab extends StatelessWidget {
+  final bool isRecording;
+  final Duration duration;
+  final String contactName;
+  final String phoneNumber;
+  final VoidCallback onStopListening;
 
-  const MindMapTab({super.key, required this.scenario});
+  const LiveListeningTab({
+    super.key,
+    required this.isRecording,
+    required this.duration,
+    required this.contactName,
+    required this.phoneNumber,
+    required this.onStopListening,
+  });
 
-  @override
-  State<MindMapTab> createState() => _MindMapTabState();
-}
-
-class _MindMapTabState extends State<MindMapTab> {
-  MindMapNode? _selectedNode;
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
 
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      bottom: false,
-      child: Stack(
-        children: [
-          // Header
-          Positioned(
-            top: 14,
-            left: 20,
-            right: 20,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'KNOWLEDGE GRAPH LIVE',
-                  style: TextStyle(
-                    letterSpacing: 2.2,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF00E5FF),
-                  ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Status Icon with Pulse
+            Container(
+              width: 130,
+              height: 130,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isRecording ? const Color(0xFFFF375F).withAlpha(35) : const Color(0xFF2C2C2E),
+                border: Border.all(
+                  color: isRecording ? const Color(0xFFFF375F) : Colors.white24,
+                  width: 2.5,
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  'Mappa: ${widget.scenario.contactName}',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Tocca un nodo per ispezionare collegamenti e decisioni.',
-                  style: TextStyle(fontSize: 11, color: Colors.white54),
-                ),
-              ],
+              ),
+              child: Icon(
+                isRecording ? CupertinoIcons.mic_fill : CupertinoIcons.mic_slash_fill,
+                color: isRecording ? const Color(0xFFFF375F) : Colors.white54,
+                size: 54,
+              ),
             ),
-          ),
+            const SizedBox(height: 24),
 
-          // Canvas Layer
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 80, bottom: 100),
-              child: GestureDetector(
-                onTapUp: (details) {
-                  for (final node in widget.scenario.mindMapNodes) {
-                    final dist = (details.localPosition - node.position).distance;
-                    if (dist < 45) {
-                      HapticFeedback.selectionClick();
-                      setState(() => _selectedNode = node);
-                      return;
-                    }
-                  }
-                  setState(() => _selectedNode = null);
-                },
-                child: CustomPaint(
-                  painter: MindMapCanvasPainter(
-                    nodes: widget.scenario.mindMapNodes,
-                    selectedNode: _selectedNode,
-                  ),
-                  child: const SizedBox.expand(),
+            // Call Target Info
+            Text(
+              contactName,
+              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              phoneNumber.isEmpty ? 'Ascolto Vivavoce Attivo' : phoneNumber,
+              style: const TextStyle(fontSize: 14, color: Colors.white54),
+            ),
+            const SizedBox(height: 20),
+
+            // Timer
+            Text(
+              _formatDuration(duration),
+              style: TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w300,
+                letterSpacing: 2.0,
+                color: isRecording ? const Color(0xFFFF375F) : Colors.white38,
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isRecording ? const Color(0xFFFF375F).withAlpha(20) : Colors.white10,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                isRecording
+                    ? 'REGISTRAZIONE IN VIVAVOCE IN CORSO'
+                    : 'ATTIVA IL VIVAVOCE E AVVIA LA REGISTRAZIONE',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.1,
+                  color: isRecording ? const Color(0xFFFF375F) : Colors.white54,
                 ),
               ),
             ),
-          ),
+            const SizedBox(height: 48),
 
-          // Bottom Details
-          if (_selectedNode != null)
-            Positioned(
-              left: 20,
-              right: 20,
-              bottom: 110,
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF121828),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: _selectedNode!.color, width: 1.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _selectedNode!.color.withAlpha(40),
-                      blurRadius: 25,
+            // Big Stop & Generate Notes Button
+            if (isRecording)
+              GestureDetector(
+                onTap: onStopListening,
+                child: Container(
+                  height: 60,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(30),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF375F), Color(0xFFFF9F0A)],
                     ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 14,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _selectedNode!.color,
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'TERMINA E CREA APPUNTI & MAPPA',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _selectedNode!.category.toUpperCase(),
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.2,
-                              color: _selectedNode!.color,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            _selectedNode!.label,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => setState(() => _selectedNode = null),
-                      child: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white54),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class MindMapCanvasPainter extends CustomPainter {
-  final List<MindMapNode> nodes;
-  final MindMapNode? selectedNode;
-
-  MindMapCanvasPainter({required this.nodes, required this.selectedNode});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    // 1. Lines
-    final linePaint = Paint()
-      ..color = Colors.white.withAlpha(35)
-      ..strokeWidth = 1.6
-      ..style = PaintingStyle.stroke;
-
-    for (final node in nodes) {
-      for (final targetId in node.connectedTo) {
-        final target = nodes.firstWhere((n) => n.id == targetId, orElse: () => node);
-        if (target != node) {
-          final path = Path()
-            ..moveTo(node.position.dx, node.position.dy)
-            ..quadraticBezierTo(
-              (node.position.dx + target.position.dx) / 2,
-              (node.position.dy + target.position.dy) / 2 - 20,
-              target.position.dx,
-              target.position.dy,
-            );
-          canvas.drawPath(path, linePaint);
-        }
-      }
-    }
-
-    // 2. Nodes
-    for (final node in nodes) {
-      final isSel = node == selectedNode;
-
-      if (isSel) {
-        final aura = Paint()
-          ..color = node.color.withAlpha(90)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4.0;
-        canvas.drawCircle(node.position, 48, aura);
-      }
-
-      final glow = Paint()
-        ..color = node.color.withAlpha(50)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-      canvas.drawCircle(node.position, 40, glow);
-
-      final body = Paint()..color = const Color(0xFF101625);
-      canvas.drawCircle(node.position, 38, body);
-
-      final border = Paint()
-        ..color = node.color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0;
-      canvas.drawCircle(node.position, 38, border);
-
-      final textSpan = TextSpan(
-        text: node.label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-        ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textAlign: TextAlign.center,
-        textDirection: TextDirection.ltr,
-      )..layout(maxWidth: 68);
-
-      textPainter.paint(
-        canvas,
-        Offset(
-          node.position.dx - (textPainter.width / 2),
-          node.position.dy - (textPainter.height / 2),
-        ),
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant MindMapCanvasPainter oldDelegate) => true;
-}
-
 // ---------------------------------------------------------------------------
-// 3. EXECUTIVE SUMMARY TAB
+// 4. APPUNTI, MAPPE CONCETTUALI & AUDIO PLAYER
 // ---------------------------------------------------------------------------
 
-class ExecutiveSummaryTab extends StatelessWidget {
-  final CallScenario scenario;
+class NotesAndMindMapTab extends StatelessWidget {
+  final List<ProcessedCallReport> reports;
+  final AudioPlayer audioPlayer;
 
-  const ExecutiveSummaryTab({super.key, required this.scenario});
+  const NotesAndMindMapTab({
+    super.key,
+    required this.reports,
+    required this.audioPlayer,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (reports.isEmpty) {
+      return const Center(
+        child: Text(
+          'Nessun appunto post-chiamata disponibile.\nEffettua una chiamata con vivavoce per registrare!',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.white38, height: 1.4),
+        ),
+      );
+    }
+
+    final latest = reports.first;
+
     return SafeArea(
-      bottom: false,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 120),
+          padding: const EdgeInsets.only(top: 10, bottom: 120),
           children: [
-            // Header
+            // Top Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'AI DEBRIEF AUTOMATICO',
+                  children: [
+                    const Text(
+                      'APPUNTI INTELLIGENTI',
                       style: TextStyle(
-                        letterSpacing: 2.2,
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF00E676),
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                        color: Color(0xFF30D158),
                       ),
                     ),
-                    SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
-                      'Sunto & Azioni Future',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                      latest.contactName,
+                      style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                ),
+                // WhatsApp / Share Button
+                IconButton(
+                  onPressed: () {
+                    HapticFeedback.lightImpact();
+                    final text = '''
+📝 APPUNTI CHIAMATA - ${latest.contactName}
+${latest.summary}
+
+✅ DECISIONI:
+${latest.decisions.map((d) => '- $d').join('\n')}
+
+🚀 DA FARE:
+${latest.actionItems.map((a) => '- $a').join('\n')}
+''';
+                    Clipboard.setData(ClipboardData(text: text));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Appunti copiati negli appunti per WhatsApp o Email!')),
+                    );
+                  },
+                  icon: const Icon(CupertinoIcons.share, color: Color(0xFF30D158)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // REAL AUDIO PLAYBACK BAR (Riproduci l'audio registrato ad alto volume)
+            if (latest.audioFilePath != null)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF0A84FF).withAlpha(60)),
+                ),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        HapticFeedback.mediumImpact();
+                        final file = File(latest.audioFilePath!);
+                        if (await file.exists()) {
+                          await audioPlayer.stop();
+                          await audioPlayer.play(DeviceFileSource(latest.audioFilePath!));
+                        }
+                      },
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Color(0xFF0A84FF),
+                        ),
+                        child: const Icon(CupertinoIcons.play_fill, color: Colors.white, size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'RIPRODUCI AUDIO DELLA CHIAMATA',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.0,
+                              color: Color(0xFF0A84FF),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Durata: ${latest.duration.inMinutes}m ${latest.duration.inSeconds % 60}s • Vivavoce Reale',
+                            style: const TextStyle(fontSize: 11, color: Colors.white54),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: () {
-                    HapticFeedback.lightImpact();
-                    final report = '''
-📌 SUNTO CHIAMATA - ${scenario.contactName} (${scenario.company})
-${scenario.executiveSummary}
-
-✅ DECISIONI:
-${scenario.decisions.map((d) => '- $d').join('\n')}
-
-🚀 DA FARE (ACTION ITEMS):
-${scenario.actionItems.map((a) => '- $a').join('\n')}
-''';
-                    Clipboard.setData(ClipboardData(text: report));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Sunto completo copiato per WhatsApp o Email!'),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF00E676).withAlpha(30),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF00E676)),
-                    ),
-                    child: Row(
-                      children: const [
-                        Icon(CupertinoIcons.share, size: 14, color: Color(0xFF00E676)),
-                        SizedBox(width: 6),
-                        Text(
-                          'CONDIVIDI',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF00E676),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
             const SizedBox(height: 20),
 
-            // Summary
+            // Executive Summary
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: const Color(0xFF101726),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withAlpha(16)),
+                color: const Color(0xFF1C1C1E),
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'SINTESI ESECUTIVA DELLA CONVERSAZIONE',
-                    style: TextStyle(
-                      fontSize: 10,
-                      letterSpacing: 1.2,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white38,
-                    ),
+                    'SUNTO CONVERSAZIONE',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white38),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
-                    scenario.executiveSummary,
-                    style: const TextStyle(fontSize: 14, height: 1.45, color: Colors.white),
+                    latest.summary,
+                    style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.white),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
-            // Decisions
+            // Interactive Mind Map
             const Text(
-              'DECISIONI PRESE NELLA CHIAMATA',
+              'MAPPA CONCETTUALE LIVE',
               style: TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.4,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFFFFB703),
+                color: Color(0xFF0A84FF),
               ),
             ),
             const SizedBox(height: 10),
-            ...scenario.decisions.map(
-              (d) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF101726),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFFFB703).withAlpha(40)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 18, color: Color(0xFFFFB703)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        d,
-                        style: const TextStyle(fontSize: 13, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
+            Container(
+              height: 240,
+              decoration: BoxDecoration(
+                color: const Color(0xFF141822),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white12),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Action Items
-            const Text(
-              'COSE DA FARE (ACTION ITEMS & DEADLINES)',
-              style: TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF00E5FF),
+              child: CustomPaint(
+                painter: ConceptGraphPainter(nodes: latest.mindMapNodes),
+                child: const SizedBox.expand(),
               ),
-            ),
-            const SizedBox(height: 10),
-            ...scenario.actionItems.map(
-              (a) => Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF101726),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF00E5FF).withAlpha(40)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(CupertinoIcons.arrow_right_circle_fill, size: 18, color: Color(0xFF00E5FF)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        a,
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// 4. CONTACT INTELLIGENCE & CUSTOM CONTACT CREATOR TAB
-// ---------------------------------------------------------------------------
-
-class ContactIntelligenceTab extends StatelessWidget {
-  final List<CallScenario> scenarios;
-  final int activeScenarioIndex;
-  final Function(int) onSelectScenario;
-  final VoidCallback onOpenAddContact;
-
-  const ContactIntelligenceTab({
-    super.key,
-    required this.scenarios,
-    required this.activeScenarioIndex,
-    required this.onSelectScenario,
-    required this.onOpenAddContact,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: ListView(
-          padding: const EdgeInsets.only(top: 14, bottom: 120),
-          children: [
-            // Title & Add Button
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'LA TUA RUBRICA INTELLIGENTE',
-                      style: TextStyle(
-                        letterSpacing: 2.2,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF7C4DFF),
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'I Tuoi Contatti',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-                GestureDetector(
-                  onTap: onOpenAddContact,
-                  child: Container(
-                    height: 44,
-                    width: 44,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF00E5FF), Color(0xFF7C4DFF)],
-                      ),
-                    ),
-                    child: const Icon(CupertinoIcons.plus, color: Colors.black, size: 22),
-                  ),
-                ),
-              ],
             ),
             const SizedBox(height: 20),
 
-            // Contacts List
-            ...List.generate(scenarios.length, (idx) {
-              final item = scenarios[idx];
-              final isCurrent = idx == activeScenarioIndex;
-
-              return GestureDetector(
-                onTap: () => onSelectScenario(idx),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: isCurrent ? const Color(0xFF141F35) : const Color(0xFF0E1320),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(
-                      color: isCurrent ? const Color(0xFF00E5FF) : Colors.white.withAlpha(15),
-                      width: isCurrent ? 1.6 : 1.0,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: item.avatarColor.withAlpha(35),
-                          border: Border.all(color: item.avatarColor),
-                        ),
-                        child: Center(
-                          child: Text(
-                            item.avatarInitials,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              color: item.avatarColor,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.contactName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '${item.role} • ${item.company}',
-                              style: const TextStyle(fontSize: 12, color: Colors.white54),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              item.phone,
-                              style: const TextStyle(fontSize: 11, color: Colors.white38),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: isCurrent ? const Color(0xFF00E5FF).withAlpha(30) : Colors.white.withAlpha(10),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          isCurrent ? 'ATTIVA' : 'CHIAMA',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: isCurrent ? const Color(0xFF00E5FF) : Colors.white70,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+            // Decisions
+            const Text(
+              'DECISIONI PRESE',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFFF9F0A)),
+            ),
+            const SizedBox(height: 8),
+            ...latest.decisions.map(
+              (d) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(CupertinoIcons.checkmark_seal_fill, size: 16, color: Color(0xFFFF9F0A)),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(d, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                  ],
                 ),
-              );
-            }),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Action Items
+            const Text(
+              'DA FARE (ACTION ITEMS)',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF30D158)),
+            ),
+            const SizedBox(height: 8),
+            ...latest.actionItems.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    const Icon(CupertinoIcons.arrow_right_circle_fill, size: 16, color: Color(0xFF30D158)),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(a, style: const TextStyle(fontSize: 13, color: Colors.white))),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1654,33 +1134,83 @@ class ContactIntelligenceTab extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// ADD CUSTOM CONTACT MODAL SHEET
-// ---------------------------------------------------------------------------
+class ConceptGraphPainter extends CustomPainter {
+  final List<Map<String, dynamic>> nodes;
 
-class AddCustomContactSheet extends StatefulWidget {
-  final Function(String, String, String, String, String) onAdd;
-
-  const AddCustomContactSheet({super.key, required this.onAdd});
+  ConceptGraphPainter({required this.nodes});
 
   @override
-  State<AddCustomContactSheet> createState() => _AddCustomContactSheetState();
+  void paint(Canvas canvas, Size size) {
+    if (nodes.isEmpty) return;
+    final root = nodes.first;
+    final rootPos = Offset(root['x'] as double, root['y'] as double);
+
+    final linePaint = Paint()
+      ..color = Colors.white24
+      ..strokeWidth = 1.5;
+
+    // Draw lines from root to other nodes
+    for (int i = 1; i < nodes.length; i++) {
+      final n = nodes[i];
+      final pos = Offset(n['x'] as double, n['y'] as double);
+      canvas.drawLine(rootPos, pos, linePaint);
+    }
+
+    // Draw Nodes
+    for (final n in nodes) {
+      final pos = Offset(n['x'] as double, n['y'] as double);
+      final color = Color(n['color'] as int);
+
+      // Aura
+      canvas.drawCircle(pos, 32, Paint()..color = color.withAlpha(40));
+
+      // Core
+      canvas.drawCircle(pos, 28, Paint()..color = const Color(0xFF1C1C1E));
+      canvas.drawCircle(pos, 28, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2);
+
+      // Label
+      final tp = TextPainter(
+        text: TextSpan(
+          text: n['label'] as String,
+          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+        ),
+        textAlign: TextAlign.center,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: 52);
+
+      tp.paint(canvas, Offset(pos.dx - tp.width / 2, pos.dy - tp.height / 2));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant ConceptGraphPainter oldDelegate) => true;
 }
 
-class _AddCustomContactSheetState extends State<AddCustomContactSheet> {
+// ---------------------------------------------------------------------------
+// ADD CONTACT MODAL SHEET
+// ---------------------------------------------------------------------------
+
+class AddPhoneContactModal extends StatefulWidget {
+  final Function(String, String, String, String) onAdd;
+
+  const AddPhoneContactModal({super.key, required this.onAdd});
+
+  @override
+  State<AddPhoneContactModal> createState() => _AddPhoneContactModalState();
+}
+
+class _AddPhoneContactModalState extends State<AddPhoneContactModal> {
   final TextEditingController _nameCtrl = TextEditingController();
-  final TextEditingController _roleCtrl = TextEditingController(text: 'Cliente / Partner');
-  final TextEditingController _companyCtrl = TextEditingController(text: 'Azienda Privata');
-  final TextEditingController _phoneCtrl = TextEditingController(text: '+39 333 456 7890');
-  final TextEditingController _topicCtrl = TextEditingController(text: 'Nuova Collaborazione & Budget');
+  final TextEditingController _phoneCtrl = TextEditingController();
+  final TextEditingController _roleCtrl = TextEditingController(text: 'Cliente');
+  final TextEditingController _companyCtrl = TextEditingController(text: 'Personale');
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _phoneCtrl.dispose();
     _roleCtrl.dispose();
     _companyCtrl.dispose();
-    _phoneCtrl.dispose();
-    _topicCtrl.dispose();
     super.dispose();
   }
 
@@ -1694,111 +1224,70 @@ class _AddCustomContactSheetState extends State<AddCustomContactSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       decoration: const BoxDecoration(
-        color: Color(0xFF101726),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        color: Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'AGGIUNGI IL TUO CONTATTO',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.5,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF00E5FF),
-                  ),
-                ),
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white38),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            _inputField('Nome e Cognome', _nameCtrl, 'Es. Luca Moretti', CupertinoIcons.person),
-            const SizedBox(height: 10),
-            _inputField('Ruolo / Qualifica', _roleCtrl, 'Es. Avvocato, Medico, Lead Dev', CupertinoIcons.briefcase),
-            const SizedBox(height: 10),
-            _inputField('Azienda o Settore', _companyCtrl, 'Es. Studio Associato, Google', CupertinoIcons.building_2_fill),
-            const SizedBox(height: 10),
-            _inputField('Numero di Telefono', _phoneCtrl, 'Es. +39 347 1234567', CupertinoIcons.phone),
-            const SizedBox(height: 10),
-            _inputField('Argomento della Chiamata', _topicCtrl, 'Es. Trattativa acquisto, Contratto, Visita', CupertinoIcons.bubble_left_bubble_right),
-            const SizedBox(height: 20),
-
-            GestureDetector(
-              onTap: () {
-                if (_nameCtrl.text.trim().isNotEmpty) {
-                  widget.onAdd(
-                    _nameCtrl.text.trim(),
-                    _roleCtrl.text.trim(),
-                    _companyCtrl.text.trim(),
-                    _phoneCtrl.text.trim(),
-                    _topicCtrl.text.trim(),
-                  );
-                  Navigator.pop(context);
-                }
-              },
-              child: Container(
-                height: 54,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(27),
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF00E5FF), Color(0xFF7C4DFF)],
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    'SALVA E AVVIA CHIAMATA ASSISTITA',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.2,
-                      fontSize: 12,
-                    ),
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'NUOVO CONTATTO TELEFONICO',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF30D158)),
+          ),
+          const SizedBox(height: 14),
+          _input('Nome e Cognome', _nameCtrl, 'Es. Luca Bianchi'),
+          const SizedBox(height: 10),
+          _input('Numero di Telefono', _phoneCtrl, 'Es. +39 347 123 4567'),
+          const SizedBox(height: 10),
+          _input('Ruolo o Relazione', _roleCtrl, 'Es. Fornitore, Avvocato, Medico'),
+          const SizedBox(height: 10),
+          _input('Azienda o Note', _companyCtrl, 'Es. Freelance, Studio'),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: () {
+              if (_nameCtrl.text.trim().isNotEmpty && _phoneCtrl.text.trim().isNotEmpty) {
+                widget.onAdd(
+                  _nameCtrl.text.trim(),
+                  _phoneCtrl.text.trim(),
+                  _roleCtrl.text.trim(),
+                  _companyCtrl.text.trim(),
+                );
+                Navigator.pop(context);
+              }
+            },
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(26),
+                color: const Color(0xFF30D158),
+              ),
+              child: const Center(
+                child: Text(
+                  'SALVA CONTATTO IN RUBRICA',
+                  style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _inputField(String label, TextEditingController ctrl, String hint, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(fontSize: 10, letterSpacing: 1.1, fontWeight: FontWeight.bold, color: Colors.white54),
-        ),
-        const SizedBox(height: 4),
-        TextField(
-          controller: ctrl,
-          style: const TextStyle(fontSize: 14, color: Colors.white),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: Colors.black38,
-            prefixIcon: Icon(icon, color: const Color(0xFF00E5FF), size: 18),
-            hintText: hint,
-            hintStyle: const TextStyle(color: Colors.white24, fontSize: 13),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        ),
-      ],
+  Widget _input(String label, TextEditingController ctrl, String hint) {
+    return TextField(
+      controller: ctrl,
+      style: const TextStyle(color: Colors.white, fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.white54, fontSize: 12),
+        hintText: hint,
+        hintStyle: const TextStyle(color: Colors.white24, fontSize: 12),
+        filled: true,
+        fillColor: Colors.black38,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+      ),
     );
   }
 }
