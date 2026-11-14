@@ -54,25 +54,25 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Telefono AI — Rubrica Reale iPhone, Trascrizione Vocale & Mappe Reali (v4.1.0 .IPA)
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v4.1.0' }}
+          name: Telefono AI — Smart Routing, Esclusioni Numeri & Risparmio Automatico (v4.2.0 .IPA)
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v4.2.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v4.1.0: Rubrica Reale iPhone & Trascrizione Viva Voce (.ipa)
+            ## 📱 Telefono AI v4.2.0: Smart Routing & Risparmio Automatico (.ipa)
             
             Compiled automatically with GitHub Actions on macOS without requiring a Mac.
             
-            ### 🌟 Novità e Risoluzioni in v4.1.0:
-            1. **👥 Rubrica Reale iPhone (`CNContactStore`)**: Accesso diretto ai tuoi contatti veri memorizzati su iPhone, con ricerca istantanea e chiamata rapida a 1 tap.
-            2. **🗣️ Trascrizione Vocale Live Reale (`speech_to_text`)**: Le parole pronunciate al microfono vengono trascritte e visualizzate a schermo in tempo reale.
-            3. **🧠 Mappe Concettuali e Decisioni 100% Reali**: Nessun testo inventato! La mappa concettuale, le decisioni e le azioni da compiere vengono generate dinamicamente a partire dalle parole effettivamente pronunciate.
-            4. **⚠️ Trasparenza Sandbox iOS per Chiamate GSM**: Spiegazione e gestione dell'isolamento microfono imposto da Apple durante le telefonate cellulari, con opzione per dettare il memo vocale immediato post-chiamata.
-            5. **🔊 Riproduzione Audio Forzata ad Alto Volume**: Motore `AVAudioSessionCategory.playAndRecord` per riprodurre le registrazioni anche con la levetta Muto inserita.
+            ### 🌟 Novità Assolute in v4.2.0:
+            1. **🛡️ Nuovo Tab Dedicato "Risparmio & Routing"**: Interfaccia grafica completa per visualizzare e gestire la lista dei numeri esclusi dal centralino VoIP.
+            2. **💰 Calcolatore di Risparmio in Tempo Reale**: Stima della spesa mensile (es. 1,63 €/mese) e calcolo automatico dei soldi risparmiati chiamando i contatti personali direttamente con la SIM TIM gratuita.
+            3. **👥 Gestione Esclusioni Diretta in Rubrica**: Ogni contatto in rubrica mostra lo stato attuale (`🛡️ TIM 0€` o `🎙️ AI`) e un pulsante scudo per includere o escludere il contatto con 1 tap.
+            4. **🔢 Tastierino Intelligente con Riconoscimento Esclusioni**: Quando digiti un numero escluso (es. `3381764***`), l'app riconosce il prefisso, accende il badge verde e imposta la chiamata diretta TIM a costo zero.
+            5. **💾 Persistenza Locale Robusta (`SharedPreferences`)**: I numeri esclusi restano salvati sul dispositivo anche dopo la chiusura dell'app.
             
-            ### 📲 Installazione su iPhone:
+            ### 📲 Installazione su iPhone con Sideloadly:
             1. Scarica `AetherPulse.ipa` qui sotto.
-            2. Installalo con Sideloadly (Windows/Mac) con il tuo Apple ID.
+            2. Aprilo con Sideloadly su Windows con cavo USB.
             3. Su iPhone: Impostazioni > Generali > Gestione dispositivo e VPN > Autorizza.
           files: |
             AetherPulse.ipa
