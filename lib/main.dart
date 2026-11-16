@@ -131,7 +131,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
   String _brokerUrl = 'https://gestoreserver.duckdns.org/telefono';
   String _brokerApiKey = 'segreto_telefono_ai_2026';
   String _brokerDid = '+3907441590208';
-  String _brokerCallerId = '+393381234567';
+  String _brokerCallerId = '3669650010';
   String _brokerProvider = 'VivaVox / Asterisk (0744 1590208)';
   bool _isBrokerConnected = false;
   bool _isTestingBroker = false;
@@ -257,7 +257,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
       _brokerUrl = prefs.getString('broker_url') ?? 'https://gestoreserver.duckdns.org/telefono';
       _brokerApiKey = prefs.getString('broker_api_key') ?? 'segreto_telefono_ai_2026';
       _brokerDid = prefs.getString('broker_did') ?? '+3907441590208';
-      _brokerCallerId = prefs.getString('broker_caller_id') ?? '+393381234567';
+      _brokerCallerId = prefs.getString('broker_caller_id') ?? '3669650010';
       _brokerProvider = prefs.getString('broker_provider') ?? 'VivaVox / Asterisk (0744 1590208)';
       _isBrokerConnected = prefs.getBool('broker_connected') ?? false;
     });
@@ -1106,16 +1106,107 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
         ),
       );
     } else {
-      // 2. Protected AI Call (Recorded & Transcribed via VoIP or Memo)
-      final uri = Uri.parse('tel:$cleanNumber');
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
+      // 2. Opzioni Chiamata: Ponte AI Automatico (Callback) o SIM Diretta
+      showCupertinoModalPopup(
+        context: context,
+        builder: (ctx) => CupertinoActionSheet(
+          title: Text(
+            contactName,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          message: Text(
+            'Numero: $phoneNumber\nScegli come avviare la chiamata:',
+          ),
+          actions: [
+            CupertinoActionSheetAction(
+              isDefaultAction: true,
+              onPressed: () {
+                Navigator.pop(ctx);
+                _triggerWebCallback(cleanNumber, contactName);
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(CupertinoIcons.sparkles, color: Color(0xFF0A84FF), size: 20),
+                  SizedBox(width: 8),
+                  Text('Ponte AI Automatico (Web Callback)'),
+                ],
+              ),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final uri = Uri.parse('tel:$cleanNumber');
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+                setState(() {
+                  _activeCallTargetName = contactName;
+                  _activeCallTargetNumber = phoneNumber;
+                });
+                _startListeningSession(contactName, phoneNumber);
+              },
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(CupertinoIcons.phone_fill, color: Color(0xFF30D158), size: 20),
+                  SizedBox(width: 8),
+                  Text('Chiamata Diretta SIM TIM'),
+                ],
+              ),
+            ),
+          ],
+          cancelButton: CupertinoActionSheetAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Annulla'),
+          ),
+        ),
+      );
+    }
+  }
+
+  // --- TRIGGER WEB CALLBACK (La VPS chiama te e unisce la chiamata) ---
+  Future<void> _triggerWebCallback(String destination, String contactName) async {
+    try {
+      final cleanUrl = _brokerUrl.trim().endsWith('/') ? _brokerUrl.trim() : '${_brokerUrl.trim()}/';
+      final uri = Uri.parse('${cleanUrl}api/callback');
+
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('📞 Avvio Ponte AI in corso...'),
+          content: Text(
+            'La VPS sta facendo squillare il tuo cellulare ($_brokerCallerId).\n\n'
+            '👉 Rispondi allo squillo per essere collegato a $contactName con registrazione e mappa Gemini attive!',
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ],
+        ),
+      );
+
+      final resp = await http.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_brokerApiKey',
+        },
+        body: jsonEncode({
+          'destination': destination,
+          'my_mobile': _brokerCallerId,
+        }),
+      ).timeout(const Duration(seconds: 8));
+
+      if (resp.statusCode != 200) {
+        debugPrint('Errore callback HTTP: ${resp.body}');
       }
-      setState(() {
-        _activeCallTargetName = contactName;
-        _activeCallTargetNumber = phoneNumber;
-      });
-      _startListeningSession(contactName, phoneNumber);
+    } catch (e) {
+      debugPrint('Eccezione callback: $e');
     }
   }
 
