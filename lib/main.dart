@@ -13,7 +13,7 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
-import 'dinner_voice_agent_sheet.dart';
+import 'autonomous_voice_agent_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1280,12 +1280,12 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
     }
   }
 
-  void _openDinnerVoiceAgentSheet() {
+  void _openAutonomousVoiceAgentSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => DinnerVoiceAgentModal(
+      builder: (ctx) => AutonomousVoiceAgentSheet(
         brokerUrl: _brokerUrl,
         onCallPhone: (phoneNumber, name) => _initiatePhoneCall(phoneNumber, name),
       ),
@@ -1315,7 +1315,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
                 },
                 isBrokerConnected: _isBrokerConnected,
                 onOpenBrokerSettings: _openBrokerSettingsSheet,
-                onOpenVoiceAgent: _openDinnerVoiceAgentSheet,
+                onOpenVoiceAgent: _openAutonomousVoiceAgentSheet,
               ),
 
               // Tab 1: Rubrica Reale iPhone
@@ -1522,7 +1522,7 @@ class _KeypadTabState extends State<KeypadTab> {
                         Icon(CupertinoIcons.sparkles, size: 12, color: Colors.white),
                         SizedBox(width: 5),
                         Text(
-                          'Organizza Cena (Voce IA)',
+                          'Chiama con Voce IA',
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,

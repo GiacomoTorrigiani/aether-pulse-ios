@@ -53,29 +53,28 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Telefono AI v5.3.0 — Agente Vocale Outbound con Voce Clonata ElevenLabs, Invito Amici RSVP & Prenotazione Cicalino (.IPA)
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.3.0' }}
+          name: Telefono AI v5.4.0 — Chiama per Me: Ottimizzatore Bozza Gemini & Agente Telefonico con Voce Clonata (.IPA)
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.4.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v5.3.0: Agente Vocale con Voce Clonata, Inviti Cena RSVP & Google Calendar
+            ## 📱 Telefono AI v5.4.0: Chiama per Me con Voce IA & Ottimizzatore Bozza Gemini
 
             ### 🌟 Novità assolute in questa versione:
-            1. 🎙️ **Agente Vocale Outbound con Voce Clonata (ElevenLabs)**:
-               - Collegamento al motore ElevenLabs con la voce clonata di Giacomo (`xEzOS5e97wrbq2qesDb4`).
-               - Pulsante rapido `[ 🍕 Organizza Cena (Voce IA) ]` in cima al tastierino.
-               - Player integrato per ascoltare i campioni della voce clonata in alta fedeltà direttamente su iPhone:
-                 - *Test Voce Clonata*
-                 - *Invito a cena per Mario al Cicalino*
-                 - *Prenotazione tavolo per 3 al Ristorante Il Cicalino*
-            2. 📞 **Flusso Autonomo Inviti Amici (RSVP)**:
-               - Chiamata sequenziale automatica agli amici (Mario, Matteo, Elena).
-               - Rilevamento in tempo reale delle risposte (Mario: SÌ, Matteo: SÌ, Elena: NO).
-               - **Popup Decisionale Intelligente**: Notifica riassuntiva con conteggio partecipanti confermati e richiesta di conferma per chiamare il ristorante.
-            3. 🍕 **Prenotazione Autonoma con la tua Voce al Ristorante Il Cicalino**:
-               - Chiamata autonoma con la voce clonata a nome Giacomo Torrigiani per 3 persone alle 20:00.
-               - Tasto rapido 1-Tap per aggiungere la cena direttamente su **Google Calendar** con tutti i dettagli!
-            4. 📅 **Sync Google Calendar 1-Tap (Modulo A)** & 🏢 **Copilot Live HUD Sala Operativa Terni (Modulo B)**.
+            1. ✍️ **Area di Testo Libero ("Scrivi Veloce")**:
+               - Scrivi qualsiasi richiesta o obiettivo in modo veloce, anche con abbreviazioni, errori o senza punteggiatura (es. *"chiama il dentista chiedi se ha posto giovedi mattina verso le 11 x pulizia denti e quanto costa"*).
+            2. ✨ **Ottimizzazione & Correzione Istantanea con Gemini**:
+               - Il modello Gemini analizza la bozza ed elabora all'istante:
+                 - **Frase di Apertura Naturale**: Cosa dirà l'assistente con la tua voce non appena l'altra persona risponde.
+                 - **Obiettivo della Telefonata**: Cosa ottenere e chiarire.
+                 - **Punti Chiave & Istruzioni di Fallback**: Come rispondere prontamente e in modo del tutto coerente se l'interlocutore fa domande, propone orari alternativi o chiede chiarimenti.
+            3. 🎙️ **Ascolta con la tua Voce Clonata (ElevenLabs)**:
+               - Tasto rapido per ascoltare in anteprima l'audio sintetizzato prima di avviare la chiamata.
+            4. 📞 **Chiamata Autonoma & Monitor Live**:
+               - Avvio della telefonata tramite Asterisk con la voce clonata di Giacomo (`xEzOS5e97wrbq2qesDb4`).
+               - Monitoraggio passo-passo della conversazione e salvataggio esiti.
+            5. 📅 **Sync Google Calendar (1-Tap)**:
+               - Pulsante a fine chiamata per registrare l'appuntamento concordato direttamente sul tuo calendario!
             
             ### 📲 Installazione su iPhone con Sideloadly:
             1. Scarica `AetherPulse.ipa` qui sotto dagli Assets della release.
