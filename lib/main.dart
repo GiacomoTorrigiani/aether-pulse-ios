@@ -71,6 +71,7 @@ class ProcessedCallReport {
   final List<String> followUpQuestions;
   final List<Map<String, dynamic>> mindMapNodes;
   final Map<String, dynamic>? cmap;
+  final Map<String, dynamic>? calendarEvent;
   final bool isFromExternalBroker;
 
   ProcessedCallReport({
@@ -88,8 +89,58 @@ class ProcessedCallReport {
     required this.followUpQuestions,
     required this.mindMapNodes,
     this.cmap,
+    this.calendarEvent,
     this.isFromExternalBroker = false,
   });
+
+  static Future<void> openGoogleCalendar({
+    required BuildContext context,
+    required String title,
+    required String startDateStr,
+    String? endDateStr,
+    String? location,
+    String? description,
+  }) async {
+    DateTime start = DateTime.tryParse(startDateStr) ?? DateTime.now();
+    DateTime end = endDateStr != null
+        ? (DateTime.tryParse(endDateStr) ?? start.add(const Duration(hours: 1)))
+        : start.add(const Duration(hours: 1));
+
+    String formatCalDate(DateTime dt) {
+      final y = dt.year.toString().padLeft(4, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      final h = dt.hour.toString().padLeft(2, '0');
+      final min = dt.minute.toString().padLeft(2, '0');
+      final s = dt.second.toString().padLeft(2, '0');
+      return '$y$m${d}T$h$min${s}Z';
+    }
+
+    final startUtc = formatCalDate(start.toUtc());
+    final endUtc = formatCalDate(end.toUtc());
+
+    final googleUrl = Uri.parse(
+      'https://calendar.google.com/calendar/render?action=TEMPLATE'
+      '&text=${Uri.encodeComponent(title)}'
+      '&dates=$startUtc/$endUtc'
+      '${location != null && location.isNotEmpty ? "&location=${Uri.encodeComponent(location)}" : ""}'
+      '${description != null && description.isNotEmpty ? "&details=${Uri.encodeComponent(description)}" : ""}',
+    );
+
+    try {
+      if (await canLaunchUrl(googleUrl)) {
+        await launchUrl(googleUrl, mode: LaunchMode.externalApplication);
+      } else {
+        await launchUrl(googleUrl, mode: LaunchMode.platformDefault);
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore apertura calendario: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -377,6 +428,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
                   followUpQuestions: ['Confermare dettagli concordati'],
                   mindMapNodes: List<Map<String, dynamic>>.from(item['mindMapNodes'] ?? []),
                   cmap: item['cmap'] is Map<String, dynamic> ? Map<String, dynamic>.from(item['cmap']) : null,
+                  calendarEvent: item['calendarEvent'] is Map<String, dynamic> ? Map<String, dynamic>.from(item['calendarEvent']) : null,
                   isFromExternalBroker: true,
                 );
                 _reports.add(report);
@@ -419,6 +471,14 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
             {'id': 'n_2', 'label': 'CALL LUNEDÌ', 'x': 90.0, 'y': 150.0, 'color': 0xFFBF5AF2, 'isRoot': false},
             {'id': 'n_3', 'label': 'DOCUMENTAZIONE', 'x': 180.0, 'y': 230.0, 'color': 0xFF64D2FF, 'isRoot': false},
           ],
+          calendarEvent: {
+            'hasEvent': true,
+            'title': 'Call Verifica Progetto con Marco Rossi',
+            'startDate': '2026-11-20T15:00:00',
+            'endDate': '2026-11-20T16:00:00',
+            'location': 'Online Call / Google Meet',
+            'description': 'Consegna documentazione e verifica preventivo concordato',
+          },
         );
         _reports.insert(0, mockReport);
       }
@@ -2384,8 +2444,97 @@ class SavingsAndExclusionsTab extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// 4. ASCOLTO LIVE & TRASCRIZIONE REALE IN TEMPO REALE
+// 4. KNOWLEDGE BASE & ASCOLTO LIVE CON COPILOT HUD REALE ("SALA OPERATIVA TERNI")
 // ---------------------------------------------------------------------------
+
+class KnowledgeBaseDocument {
+  final String id;
+  final String title;
+  final String category;
+  final List<String> keywords;
+  final List<String> talkingPoints;
+  final String fullContent;
+
+  const KnowledgeBaseDocument({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.keywords,
+    required this.talkingPoints,
+    required this.fullContent,
+  });
+}
+
+class KnowledgeBaseRepository {
+  static final List<KnowledgeBaseDocument> documents = [
+    const KnowledgeBaseDocument(
+      id: 'sala_operativa_terni',
+      title: 'Sala Operativa Terni — Procedure di Emergenza & Allarmi',
+      category: 'Protezione Civile & Reperibilità Comunale',
+      keywords: [
+        'sala operativa', 'terni', 'emergenza', 'allerta', 'procedura',
+        'meteo', 'fiume nera', 'coc', 'protezione civile', 'reperibilità',
+        'frana', 'allagamento', 'polo chimico', 'acciaierie'
+      ],
+      talkingPoints: [
+        'Identificarsi con fermezza: "Qui Sala Operativa Terni, operatore Giacomo Torrigiani."',
+        'Richiedere via/piazza esatta o punto cardinale noto di Terni e recapito del segnalante.',
+        'Emergenza meteo / idraulica Nera: confermare che il presidio COC è aperto e le squadre reperibili sono allertate.',
+        'Numeri ufficiali di contatto: Sala Operativa 0744 549888, Reperibilità H24 COC 0744 549111, VV.F. 115.',
+        'Non divulgare stime non certificate: comunicare che il verbale ufficiale verrà trasmesso a Prefettura e PEC entro 30 minuti.'
+      ],
+      fullContent: '''
+PROTOCOLLO D'INTERVENTO — SALA OPERATIVA COMUNALE TERNI
+
+1. PROCEDURA RICEZIONE SEGNALAZIONI:
+- Registrare data, ora precisa, nome e recapito del chiamante.
+- Verificare la zona esatta (Centro, Maratta, Papigno, Piediluco, Valserra).
+- Assegnare codice: Giallo (Presidio/Monitoraggio) o Rosso (Intervento d'urgenza).
+
+2. ALLERTE METEO & IDROGEOLOGICHE:
+- Controllo idrometri Fiume Nera e Torrente Serra.
+- Al superamento della soglia 2: allertare squadre comunali e polizia locale.
+- Linee telefoniche COC: 0744 549111 / 0744 549888.
+
+3. RISCHIO INDUSTRIALE RIR (ACCIAIERIE & POLO CHIMICO):
+- Allarme sonoro Bitonale/Tritonale: attivare piano d'evacuazione/confinamento.
+- Ordinanza immediata: finestre chiuse, climatizzatori spenti, stop al traffico.
+- Notifica immediata a Prefettura di Terni e Comando Provinciale VV.F. (115).
+''',
+    ),
+    const KnowledgeBaseDocument(
+      id: 'ristorante_cicalinono',
+      title: 'Ristorante Il Cicalinono — Dettagli & Prenotazioni',
+      category: 'Ristorazione & Personale',
+      keywords: ['cicalino', 'cicalinono', 'prenotazione', 'tavolo', 'pizzeria', 'orario', 'persone'],
+      talkingPoints: [
+        'Prenotare a nome: Giacomo Torrigiani.',
+        'Orario concordato: ore 21:00 (accettata alternativa delle 20:30 se proposta).',
+        'Numero persone: 4 coperti.',
+        'Richiedere tavolo all\'interno o veranda coperta riscaldata.'
+      ],
+      fullContent: '''
+SCHEDA RISTORANTE IL CICALINONO (TERNI)
+- Indirizzo: Terni (TR)
+- Orari servizio: 19:30 - 23:30
+- Recapito telefonico: 0744 278158
+''',
+    ),
+  ];
+
+  static KnowledgeBaseDocument? findMatch(String text) {
+    if (text.isEmpty) return null;
+    final lower = text.toLowerCase();
+    for (final doc in documents) {
+      for (final kw in doc.keywords) {
+        if (lower.contains(kw)) {
+          return doc;
+        }
+      }
+    }
+    return null;
+  }
+}
 
 class LiveListeningTab extends StatelessWidget {
   final bool isListening;
@@ -2413,14 +2562,176 @@ class LiveListeningTab extends StatelessWidget {
     return '$m:$s';
   }
 
+  void _showKnowledgeBaseSheet(BuildContext context, KnowledgeBaseDocument doc) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (_, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF161618),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(top: BorderSide(color: Color(0xFF0A84FF), width: 2)),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFFFD60A), size: 22),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'COPILOT DIALOGO IN TEMPO REALE',
+                        style: TextStyle(color: Color(0xFF0A84FF), fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  GestureDetector(
+                    onTap: () => Navigator.pop(ctx),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: const BoxDecoration(color: Colors.white10, shape: BoxShape.circle),
+                      child: const Icon(CupertinoIcons.xmark, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                doc.title,
+                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Settore: ${doc.category}',
+                style: const TextStyle(color: Color(0xFF64D2FF), fontSize: 12),
+              ),
+              const SizedBox(height: 18),
+
+              // Sezione: Cosa Riferire Adesso (Talking Points)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E2838),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF0A84FF).withAlpha(120)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(CupertinoIcons.chat_bubble_2_fill, color: Color(0xFF64D2FF), size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          '🗣️ COSA RIFERIRE ALL\'INTERLOCUTORE ADESSO',
+                          style: TextStyle(color: Color(0xFF64D2FF), fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ...doc.talkingPoints.map((point) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 3),
+                            child: Icon(CupertinoIcons.checkmark_circle_fill, size: 14, color: Color(0xFF30D158)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              point,
+                              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.35, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // Protocollo Ufficiale Completo
+              const Row(
+                children: [
+                  Icon(CupertinoIcons.doc_text_fill, color: Colors.white54, size: 14),
+                  SizedBox(width: 6),
+                  Text('DOCUMENTO & PROTOCOLLO COMPLETO', style: TextStyle(color: Colors.white54, fontSize: 11, fontWeight: FontWeight.bold)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E1E22),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white12),
+                ),
+                child: SelectableText(
+                  doc.fullContent,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4, fontFamily: 'monospace'),
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Tasto Copia
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0A84FF),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: '${doc.title}\n\n${doc.talkingPoints.join("\n")}'));
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Punti chiave copiati negli appunti!'), backgroundColor: Color(0xFF30D158)),
+                  );
+                },
+                icon: const Icon(CupertinoIcons.doc_on_clipboard_fill, size: 16),
+                label: const Text('Copia Punti Chiave Negli Appunti', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final matchedDoc = KnowledgeBaseRepository.findMatch(liveTranscript);
+
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
           children: [
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2430,66 +2741,93 @@ class LiveListeningTab extends StatelessWidget {
                   children: [
                     Text(
                       contactName,
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       phoneNumber.isNotEmpty ? phoneNumber : 'In ascolto...',
-                      style: const TextStyle(fontSize: 13, color: Colors.white54),
+                      style: const TextStyle(fontSize: 12, color: Colors.white54),
                     ),
                   ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isListening ? const Color(0xFFFF375F).withAlpha(40) : Colors.white10,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isListening ? const Color(0xFFFF375F) : Colors.white24,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
+                Row(
+                  children: [
+                    // Tasto Rapido Manuale HUD Sala Operativa
+                    GestureDetector(
+                      onTap: () => _showKnowledgeBaseSheet(context, matchedDoc ?? KnowledgeBaseRepository.documents.first),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isListening ? const Color(0xFFFF375F) : Colors.white38,
+                          color: const Color(0xFF0A84FF).withAlpha(35),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFF0A84FF)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(CupertinoIcons.building_2_fill, size: 12, color: Color(0xFF64D2FF)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Sala Operativa (HUD)',
+                              style: TextStyle(color: Color(0xFF64D2FF), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        isListening ? _formatDuration(duration) : 'In Pausa',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isListening ? const Color(0xFFFF375F) : Colors.white54,
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: isListening ? const Color(0xFFFF375F).withAlpha(40) : Colors.white10,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isListening ? const Color(0xFFFF375F) : Colors.white24,
                         ),
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isListening ? const Color(0xFFFF375F) : Colors.white38,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isListening ? _formatDuration(duration) : 'In Pausa',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: isListening ? const Color(0xFFFF375F) : Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
 
             // Live Audio Visualizer Wave Animation
             Container(
-              height: 100,
+              height: 70,
               width: double.infinity,
               decoration: BoxDecoration(
                 color: const Color(0xFF1C1C1E),
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(color: Colors.white12),
               ),
               child: isListening
                   ? Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(24, (i) {
-                        final h = 15.0 + (sin((duration.inSeconds * 4) + i) * 35.0).abs();
+                        final h = 10.0 + (sin((duration.inSeconds * 4) + i) * 25.0).abs();
                         return Container(
-                          width: 4,
+                          width: 3.5,
                           height: h,
                           decoration: BoxDecoration(
                             color: Color.lerp(const Color(0xFF0A84FF), const Color(0xFF30D158), i / 24),
@@ -2501,17 +2839,64 @@ class LiveListeningTab extends StatelessWidget {
                   : const Center(
                       child: Text(
                         'Premi "Avvia Ascolto" per iniziare',
-                        style: TextStyle(color: Colors.white38, fontSize: 13),
+                        style: TextStyle(color: Colors.white38, fontSize: 12),
                       ),
                     ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+
+            // BANNER HUD RILEVAMENTO DOCUMENTO / SALA OPERATIVA
+            if (matchedDoc != null) ...[
+              GestureDetector(
+                onTap: () => _showKnowledgeBaseSheet(context, matchedDoc),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E283A),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF0A84FF), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0A84FF).withAlpha(90),
+                        blurRadius: 10,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(CupertinoIcons.lightbulb_fill, color: Color(0xFFFFD60A), size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '💡 SUGGERIMENTO COPILOT: ${matchedDoc.title}',
+                              style: const TextStyle(color: Color(0xFF64D2FF), fontSize: 10, fontWeight: FontWeight.bold),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Tocca qui per vedere cosa riferire subito alla persona!',
+                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(CupertinoIcons.chevron_right, color: Colors.white54, size: 14),
+                    ],
+                  ),
+                ),
+              ),
+            ],
 
             // Real Time Speech-to-Text Box
             Expanded(
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: const Color(0xFF1C1C1E),
                   borderRadius: BorderRadius.circular(16),
@@ -2525,12 +2910,12 @@ class LiveListeningTab extends StatelessWidget {
                       children: [
                         Row(
                           children: const [
-                            Icon(CupertinoIcons.quote_bubble_fill, color: Color(0xFF0A84FF), size: 16),
+                            Icon(CupertinoIcons.quote_bubble_fill, color: Color(0xFF0A84FF), size: 15),
                             SizedBox(width: 8),
                             Text(
-                              'TRASCRIZIONE REALE IN TEMPO REALE',
+                              'TRASCRIZIONE IN TEMPO REALE',
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 0.8,
                                 color: Color(0xFF0A84FF),
@@ -2539,21 +2924,21 @@ class LiveListeningTab extends StatelessWidget {
                           ],
                         ),
                         if (isListening)
-                          const CupertinoActivityIndicator(radius: 8, color: Color(0xFF0A84FF)),
+                          const CupertinoActivityIndicator(radius: 7, color: Color(0xFF0A84FF)),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     Expanded(
                       child: SingleChildScrollView(
                         reverse: true,
                         child: Text(
                           liveTranscript.isEmpty
                               ? (isListening
-                                  ? 'Parla o ascolta l\'interlocutore in vivavoce: ogni singola parola verrà trascritta qui...'
+                                  ? 'Parla o ascolta l\'interlocutore in vivavoce: ogni parola viene trascritta qui...'
                                   : 'Nessun testo acquisito. Premi il pulsante sotto per avviare.')
                               : liveTranscript,
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: 14,
                             height: 1.4,
                             color: liveTranscript.isEmpty ? Colors.white38 : Colors.white,
                           ),
@@ -2564,7 +2949,7 @@ class LiveListeningTab extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
             // Controls
             Padding(
@@ -2577,11 +2962,11 @@ class LiveListeningTab extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0A84FF),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: onRestartListening,
-                        icon: const Icon(CupertinoIcons.play_fill, size: 18),
+                        icon: const Icon(CupertinoIcons.play_fill, size: 16),
                         label: const Text('Avvia Ascolto', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     )
@@ -2591,11 +2976,11 @@ class LiveListeningTab extends StatelessWidget {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFFF375F),
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
                         onPressed: onStopListening,
-                        icon: const Icon(CupertinoIcons.stop_fill, size: 18),
+                        icon: const Icon(CupertinoIcons.stop_fill, size: 16),
                         label: const Text('Termina & Genera Mappa Reale', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
@@ -3045,6 +3430,51 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
                           ),
                         ),
                       ],
+
+                      // Modulo A: Tasto Google Calendar se evento rilevato
+                      if (call.calendarEvent != null && call.calendarEvent!['hasEvent'] == true) ...[
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            ProcessedCallReport.openGoogleCalendar(
+                              context: context,
+                              title: call.calendarEvent!['title'] ?? call.contactName,
+                              startDateStr: call.calendarEvent!['startDate'] ?? '',
+                              endDateStr: call.calendarEvent!['endDate'],
+                              location: call.calendarEvent!['location'],
+                              description: call.calendarEvent!['description'],
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF30D158).withAlpha(25),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: const Color(0xFF30D158).withAlpha(150)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(CupertinoIcons.calendar_badge_plus, size: 14, color: Color(0xFF30D158)),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '📅 Salva in Google Calendar (${call.calendarEvent!['title'] ?? "Appuntamento"})',
+                                    style: const TextStyle(
+                                      color: Color(0xFF30D158),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const Icon(CupertinoIcons.arrow_up_right, size: 11, color: Color(0xFF30D158)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 12),
 
                       // Pulsanti d'Azione: Riascolta & Vedi Mappa
@@ -3185,6 +3615,82 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
             style: const TextStyle(fontSize: 11, color: Colors.white54),
           ),
           const SizedBox(height: 12),
+
+          // Modulo A: Card Google Calendar se appuntamento rilevato
+          if (activeReport.calendarEvent != null && activeReport.calendarEvent!['hasEvent'] == true) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1B281B),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFF30D158), width: 1.2),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(CupertinoIcons.calendar_badge_plus, color: Color(0xFF30D158), size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'MEMORIA AI: APPUNTAMENTO RILEVATO',
+                            style: TextStyle(color: Color(0xFF30D158), fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF30D158).withAlpha(40),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text('GOOGLE CALENDAR', style: TextStyle(color: Color(0xFF30D158), fontSize: 9, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    activeReport.calendarEvent!['title'] ?? 'Appuntamento',
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Orario: ${activeReport.calendarEvent!['startDate']} • ${activeReport.calendarEvent!['location'] ?? ""}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF30D158),
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        HapticFeedback.mediumImpact();
+                        ProcessedCallReport.openGoogleCalendar(
+                          context: context,
+                          title: activeReport.calendarEvent!['title'] ?? activeReport.contactName,
+                          startDateStr: activeReport.calendarEvent!['startDate'] ?? '',
+                          endDateStr: activeReport.calendarEvent!['endDate'],
+                          location: activeReport.calendarEvent!['location'],
+                          description: activeReport.calendarEvent!['description'],
+                        );
+                      },
+                      icon: const Icon(CupertinoIcons.calendar, size: 14),
+                      label: const Text('Salva su Google Calendar (1-Tap)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
 
           // Audio Player con Cache Locale & AudioContext Playback
           if (activeReport.audioUrl != null || activeReport.audioFilePath != null) ...[

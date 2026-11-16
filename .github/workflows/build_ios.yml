@@ -53,18 +53,26 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Telefono AI v5.1.0 — Vista Calendario & Orari, Player Audio MP3 con Cache & Mappe CmapTools (.IPA)
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.1.0' }}
+          name: Telefono AI v5.2.0 — Sync Google Calendar 1-Tap, Copilot Live HUD Sala Operativa Terni & CmapTools (.IPA)
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.2.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v5.1.0: Calendario Chiamate, Player Audio MP3 & CmapTools
-            
+            ## 📱 Telefono AI v5.2.0: Google Calendar 1-Tap & Copilot Live HUD Sala Operativa
+
             ### 🌟 Novità assolute in questa versione:
-            1. 📅 **Vista Calendario & Cronologia Chiamate**: Visualizzazione ordinata per giorno e ore (es. "Oggi • Lunedì 16 Novembre", "Ieri", ecc.) con orario esatto, durata e schede di facile lettura.
-            2. 🎙️ **Player Audio Fix 100%**: Download e caching locale ultra-veloce in formato MP3, con configurazione audio `playback` (suona ad alto volume anche con iPhone su Silenzioso/Muto).
-            3. 🗺️ **Mappe CmapTools con Schema Relazionale**: Trascrizione integrale reale e generazione del grafo relazionale con proposizioni esplicite (es. prenotazione al Ristorante Il Cicalinono per 4 persone alle ore 21:00).
-            4. ⚡ **Sincronizzazione Cloud Istantanea**: Eliminati i doppioni e resa immediata la ricezione delle nuove chiamate registrate da Asterisk.
+            1. 📅 **Modulo A — Sync Google Calendar Istantaneo (1-Tap)**:
+               - Riconoscimento automatico di appuntamenti, prenotazioni e visite mediche/lavorative da Gemini.
+               - Pulsante **"Aggiungi a Google Calendar"** sia nella scheda chiamata che nella timeline/agenda.
+               - Apre direttamente l'app Google Calendar o la schermata web ufficiale con data, ora, titolo, luogo e dettagli già precompilati in 1 tocco!
+            2. 🏢 **Modulo B — Copilot Live HUD (Sala Operativa Terni & Procedure Emergenza)**:
+               - Knowledge Base documentale integrata in locale nell'app per la Sala Operativa di Terni (protocolli allerta meteo, soglie Fiume Nera, linee COC 0744 549111/549888, Piano RIR Polo Chimico/Acciaierie).
+               - Riconoscimento vocale live delle parole chiave durante la telefonata: se l'interlocutore pone domande su allerta, COC, esondazioni o emergenze, compare un banner HUD dinamico ad alto contrasto.
+               - Toccando il banner o il pulsante rapido `[ 🏢 Sala Operativa (HUD) ]` si apre il foglio con i punti chiave esatti da riferire immediatamente alla persona al telefono.
+            3. 🎙️ **Player Audio MP3 con Cache Locale & AudioSession Fix**:
+               - Riascolto istantaneo delle chiamate Asterisk ad alto volume anche con iPhone su switch silenzioso.
+            4. 🗺️ **Mappe CmapTools & Cronologia a Calendario**:
+               - Raggruppamento delle chiamate per data e orario con nodi concettuali CmapTools.
             
             ### 📲 Installazione su iPhone con Sideloadly:
             1. Scarica `AetherPulse.ipa` qui sotto dagli Assets della release.
