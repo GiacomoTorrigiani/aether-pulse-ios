@@ -62,12 +62,14 @@ class ProcessedCallReport {
   final DateTime dateTime;
   final Duration duration;
   final String? audioFilePath;
+  final String? audioUrl;
   final String rawTranscript;
   final String summary;
   final List<String> decisions;
   final List<String> actionItems;
   final List<String> followUpQuestions;
   final List<Map<String, dynamic>> mindMapNodes;
+  final Map<String, dynamic>? cmap;
   final bool isFromExternalBroker;
 
   ProcessedCallReport({
@@ -77,12 +79,14 @@ class ProcessedCallReport {
     required this.dateTime,
     required this.duration,
     this.audioFilePath,
+    this.audioUrl,
     required this.rawTranscript,
     required this.summary,
     required this.decisions,
     required this.actionItems,
     required this.followUpQuestions,
     required this.mindMapNodes,
+    this.cmap,
     this.isFromExternalBroker = false,
   });
 }
@@ -362,12 +366,15 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
                   phoneNumber: item['phoneNumber'] ?? _brokerDid,
                   dateTime: DateTime.tryParse(item['dateTime'] ?? '') ?? DateTime.now(),
                   duration: Duration(seconds: item['durationSeconds'] ?? 180),
+                  audioFilePath: item['audioPath'],
+                  audioUrl: item['audioUrl'] ?? item['audioPath'],
                   rawTranscript: item['transcript'] ?? 'Trascrizione dal centralino cloud completata.',
                   summary: item['summary'] ?? 'Sintesi generata dal centralino Asterisk / Whisper.',
                   decisions: List<String>.from(item['decisions'] ?? ['Accordo operativo registrato sul server']),
                   actionItems: List<String>.from(item['actionItems'] ?? ['Verificare dettagli chiamata']),
                   followUpQuestions: ['Confermare dettagli concordati'],
                   mindMapNodes: List<Map<String, dynamic>>.from(item['mindMapNodes'] ?? []),
+                  cmap: item['cmap'] is Map<String, dynamic> ? item['cmap'] : null,
                   isFromExternalBroker: true,
                 );
                 _reports.insert(0, report);
@@ -2630,27 +2637,12 @@ class NotesAndMindMapTab extends StatefulWidget {
 
 class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
   ProcessedCallReport? _selectedReport;
-  bool _isPlayingAudio = false;
 
   @override
   void initState() {
     super.initState();
     if (widget.reports.isNotEmpty) {
       _selectedReport = widget.reports.first;
-    }
-  }
-
-  void _toggleAudioPlay(String? path) async {
-    if (path == null) return;
-    if (_isPlayingAudio) {
-      await widget.audioPlayer.pause();
-      setState(() => _isPlayingAudio = false);
-    } else {
-      await widget.audioPlayer.play(DeviceFileSource(path));
-      setState(() => _isPlayingAudio = true);
-      widget.audioPlayer.onPlayerComplete.listen((_) {
-        if (mounted) setState(() => _isPlayingAudio = false);
-      });
     }
   }
 
@@ -2825,36 +2817,28 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
                           ),
                         ],
                       ),
-                      if (activeReport.audioFilePath != null)
-                        IconButton(
-                          onPressed: () => _toggleAudioPlay(activeReport.audioFilePath),
-                          icon: Icon(
-                            _isPlayingAudio ? CupertinoIcons.pause_circle_fill : CupertinoIcons.play_circle_fill,
-                            color: const Color(0xFF30D158),
-                            size: 34,
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
-                  // Real Dynamic Mind Map Graph Widget
-                  Container(
-                    width: double.infinity,
-                    height: 240,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF121214),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: CustomPaint(
-                        painter: DynamicMindMapPainter(nodes: activeReport.mindMapNodes),
+                    // Audio Player per riascolto registrazione reale
+                    if (activeReport.audioUrl != null || activeReport.audioFilePath != null) ...[
+                      CallAudioPlayerWidget(
+                        audioUrl: activeReport.audioUrl ?? activeReport.audioFilePath!,
+                        totalDuration: activeReport.duration,
                       ),
+                      const SizedBox(height: 16),
+                    ],
+
+                    // Mappa Concettuale Stile CmapTools / Flowchart
+                    _sectionHeader(CupertinoIcons.flowchart_fill, 'MAPPA CONCETTUALE CMAPTOOLS & FLOWCHART'),
+                    const SizedBox(height: 8),
+                    CmapToolsFlowchartView(
+                      cmapData: activeReport.cmap,
+                      fallbackNodes: activeReport.mindMapNodes,
+                      title: activeReport.contactName,
                     ),
-                  ),
-                  const SizedBox(height: 18),
+                    const SizedBox(height: 18),
 
                   // Summary Card
                   _sectionHeader(CupertinoIcons.doc_text_fill, 'RIASSUNTO DINAMICO REALE'),
@@ -3025,4 +3009,528 @@ class DynamicMindMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant DynamicMindMapPainter oldDelegate) => true;
+}
+
+// ---------------------------------------------------------------------------
+// 7. CALL AUDIO PLAYER WIDGET (PLAYER AUDIO REALE)
+// ---------------------------------------------------------------------------
+
+class CallAudioPlayerWidget extends StatefulWidget {
+  final String audioUrl;
+  final Duration totalDuration;
+
+  const CallAudioPlayerWidget({
+    super.key,
+    required this.audioUrl,
+    required this.totalDuration,
+  });
+
+  @override
+  State<CallAudioPlayerWidget> createState() => _CallAudioPlayerWidgetState();
+}
+
+class _CallAudioPlayerWidgetState extends State<CallAudioPlayerWidget> {
+  final AudioPlayer _player = AudioPlayer();
+  PlayerState _playerState = PlayerState.stopped;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  double _playbackSpeed = 1.0;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _duration = widget.totalDuration;
+    _initAudioListeners();
+  }
+
+  void _initAudioListeners() {
+    _player.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _playerState = state);
+    });
+    _player.onPositionChanged.listen((pos) {
+      if (mounted) setState(() => _position = pos);
+    });
+    _player.onDurationChanged.listen((dur) {
+      if (mounted) setState(() => _duration = dur);
+    });
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _playerState = PlayerState.stopped;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    if (_playerState == PlayerState.playing) {
+      await _player.pause();
+    } else {
+      setState(() => _isLoading = true);
+      try {
+        if (widget.audioUrl.startsWith('http')) {
+          await _player.play(UrlSource(widget.audioUrl));
+        } else {
+          await _player.play(DeviceFileSource(widget.audioUrl));
+        }
+      } catch (e) {
+        debugPrint('Errore playback: $e');
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _cycleSpeed() async {
+    final newSpeed = _playbackSpeed == 1.0 ? 1.5 : (_playbackSpeed == 1.5 ? 2.0 : 1.0);
+    await _player.setPlaybackRate(newSpeed);
+    setState(() => _playbackSpeed = newSpeed);
+  }
+
+  String _formatDuration(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isPlaying = _playerState == PlayerState.playing;
+    final maxSec = _duration.inSeconds > 0
+        ? _duration.inSeconds.toDouble()
+        : (widget.totalDuration.inSeconds > 0 ? widget.totalDuration.inSeconds.toDouble() : 60.0);
+    final curSec = _position.inSeconds.toDouble().clamp(0.0, maxSec);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1C1C1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2C2C2E)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: _togglePlay,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0A84FF),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0A84FF).withAlpha(100),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isLoading
+                        ? const CupertinoActivityIndicator(color: Colors.white)
+                        : Icon(
+                            isPlaying ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(_position),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                        const Text(
+                          '🎙️ Registrazione Chiamata',
+                          style: TextStyle(color: Colors.white54, fontSize: 11),
+                        ),
+                        Text(
+                          _formatDuration(_duration),
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 12,
+                            fontFeatures: [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ),
+                    SliderTheme(
+                      data: SliderThemeData(
+                        trackHeight: 4,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                        activeTrackColor: const Color(0xFF0A84FF),
+                        inactiveTrackColor: Colors.white12,
+                        thumbColor: Colors.white,
+                      ),
+                      child: Slider(
+                        value: curSec,
+                        min: 0.0,
+                        max: maxSec,
+                        onChanged: (val) {
+                          _player.seek(Duration(seconds: val.toInt()));
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _cycleSpeed,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white10,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${_playbackSpeed}x',
+                    style: const TextStyle(
+                      color: Color(0xFF0A84FF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 8. CMAPTOOLS FLOWCHART VIEW & PAINTER
+// ---------------------------------------------------------------------------
+
+class CmapToolsFlowchartView extends StatefulWidget {
+  final Map<String, dynamic>? cmapData;
+  final List<Map<String, dynamic>> fallbackNodes;
+  final String title;
+
+  const CmapToolsFlowchartView({
+    super.key,
+    this.cmapData,
+    required this.fallbackNodes,
+    required this.title,
+  });
+
+  @override
+  State<CmapToolsFlowchartView> createState() => _CmapToolsFlowchartViewState();
+}
+
+class _CmapToolsFlowchartViewState extends State<CmapToolsFlowchartView> {
+  final TransformationController _transformController = TransformationController();
+  bool _showFlowchartStyle = true;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 320,
+      decoration: BoxDecoration(
+        color: const Color(0xFF101012),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Stack(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: InteractiveViewer(
+              transformationController: _transformController,
+              minScale: 0.4,
+              maxScale: 3.0,
+              boundaryMargin: const EdgeInsets.all(120),
+              child: SizedBox(
+                width: 440,
+                height: 480,
+                child: CustomPaint(
+                  painter: _showFlowchartStyle
+                      ? CmapFlowchartPainter(
+                          cmapData: widget.cmapData,
+                          fallbackNodes: widget.fallbackNodes,
+                          title: widget.title,
+                        )
+                      : DynamicMindMapPainter(nodes: widget.fallbackNodes),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() => _showFlowchartStyle = !_showFlowchartStyle);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1C1E).withAlpha(220),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          _showFlowchartStyle ? CupertinoIcons.flowchart : CupertinoIcons.circle_grid_hex,
+                          size: 14,
+                          color: const Color(0xFF0A84FF),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _showFlowchartStyle ? 'Stile CmapTools' : 'Stile MindMap',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () {
+                    _transformController.value = Matrix4.identity();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1C1C1E).withAlpha(220),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const Icon(CupertinoIcons.viewfinder, size: 14, color: Colors.white70),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            bottom: 10,
+            left: 14,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.black.withAlpha(160),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '🔍 Usa 2 dita per zoomare e scorrere',
+                style: TextStyle(color: Colors.white38, fontSize: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class CmapFlowchartPainter extends CustomPainter {
+  final Map<String, dynamic>? cmapData;
+  final List<Map<String, dynamic>> fallbackNodes;
+  final String title;
+
+  CmapFlowchartPainter({
+    this.cmapData,
+    required this.fallbackNodes,
+    required this.title,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    List<Map<String, dynamic>> concepts = [];
+    List<Map<String, dynamic>> links = [];
+
+    if (cmapData != null && cmapData!['concepts'] is List && (cmapData!['concepts'] as List).isNotEmpty) {
+      concepts = List<Map<String, dynamic>>.from(cmapData!['concepts']);
+      if (cmapData!['links'] is List) {
+        links = List<Map<String, dynamic>>.from(cmapData!['links']);
+      }
+    } else {
+      concepts.add({
+        'id': 'c_0',
+        'label': title,
+        'category': 'actor',
+        'x': 220.0,
+        'y': 60.0,
+        'color': '0xFF0A84FF',
+      });
+
+      final subNodes = fallbackNodes.where((n) => n['isRoot'] != true).toList();
+      double currentY = 170.0;
+      for (int i = 0; i < subNodes.length; i++) {
+        final sn = subNodes[i];
+        final cid = 'c_${i + 1}';
+        final isLeft = i % 2 == 0;
+        final cx = isLeft ? 120.0 : 320.0;
+        final cy = currentY;
+        if (!isLeft) currentY += 95.0;
+
+        concepts.add({
+          'id': cid,
+          'label': sn['label'] ?? 'Dettaglio',
+          'category': 'detail',
+          'x': cx,
+          'y': cy,
+          'color': '0xFF30D158',
+        });
+
+        links.add({
+          'from': 'c_0',
+          'to': cid,
+          'label': i == 0 ? 'ha richiesto' : (i == 1 ? 'concordato per' : 'dettagli'),
+        });
+      }
+    }
+
+    final conceptMap = <String, Map<String, dynamic>>{};
+    for (final c in concepts) {
+      conceptMap[c['id'].toString()] = c;
+    }
+
+    final arrowPaint = Paint()
+      ..color = const Color(0xFF0A84FF).withAlpha(180)
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    for (final link in links) {
+      final fromC = conceptMap[link['from'].toString()];
+      final toC = conceptMap[link['to'].toString()];
+      if (fromC == null || toC == null) continue;
+
+      final fx = (fromC['x'] as num).toDouble();
+      final fy = (fromC['y'] as num).toDouble() + 24.0;
+      final tx = (toC['x'] as num).toDouble();
+      final ty = (toC['y'] as num).toDouble() - 24.0;
+
+      final path = Path()
+        ..moveTo(fx, fy)
+        ..cubicTo(fx, fy + 25, tx, ty - 25, tx, ty);
+      canvas.drawPath(path, arrowPaint);
+
+      final arrowHead = Path()
+        ..moveTo(tx, ty)
+        ..lineTo(tx - 6, ty - 8)
+        ..lineTo(tx + 6, ty - 8)
+        ..close();
+      canvas.drawPath(arrowHead, Paint()..color = const Color(0xFF0A84FF)..style = PaintingStyle.fill);
+
+      final midX = (fx + tx) / 2;
+      final midY = (fy + ty) / 2;
+      final linkText = link['label']?.toString() ?? 'collega';
+
+      final linkSpan = TextSpan(
+        text: linkText,
+        style: const TextStyle(
+          color: Color(0xFF64D2FF),
+          fontSize: 8.5,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      final ltp = TextPainter(text: linkSpan, textDirection: TextDirection.ltr)..layout();
+
+      final pillRect = Rect.fromCenter(center: Offset(midX, midY), width: ltp.width + 12, height: 18);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(pillRect, const Radius.circular(6)),
+        Paint()..color = const Color(0xFF1E1E22),
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(pillRect, const Radius.circular(6)),
+        Paint()..color = const Color(0xFF64D2FF).withAlpha(100)..style = PaintingStyle.stroke..strokeWidth = 0.8,
+      );
+      ltp.paint(canvas, Offset(midX - (ltp.width / 2), midY - (ltp.height / 2)));
+    }
+
+    for (final c in concepts) {
+      final cx = (c['x'] as num).toDouble();
+      final cy = (c['y'] as num).toDouble();
+      final label = c['label']?.toString() ?? '';
+      final category = c['category']?.toString() ?? 'concept';
+      final isRoot = category == 'actor' || c['id'] == 'c_0';
+
+      final boxWidth = isRoot ? 160.0 : 140.0;
+      final boxHeight = isRoot ? 52.0 : 46.0;
+      final boxRect = Rect.fromCenter(center: Offset(cx, cy), width: boxWidth, height: boxHeight);
+      final rrect = RRect.fromRectAndRadius(boxRect, const Radius.circular(12));
+
+      canvas.drawRRect(
+        rrect,
+        Paint()..color = Colors.black.withAlpha(160)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      );
+
+      canvas.drawRRect(
+        rrect,
+        Paint()..color = isRoot ? const Color(0xFF1F2430) : const Color(0xFF1C1C1E),
+      );
+
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = isRoot ? const Color(0xFF0A84FF) : const Color(0xFF3A3A3C)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = isRoot ? 2.0 : 1.2,
+      );
+
+      final accentRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(boxRect.left + 4, boxRect.top + 8, 4, boxHeight - 16),
+        const Radius.circular(2),
+      );
+      canvas.drawRRect(
+        accentRect,
+        Paint()..color = isRoot ? const Color(0xFF0A84FF) : const Color(0xFF30D158),
+      );
+
+      final textSpan = TextSpan(
+        text: label,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: isRoot ? 11.5 : 10.0,
+          fontWeight: isRoot ? FontWeight.bold : FontWeight.w600,
+        ),
+      );
+      final tp = TextPainter(
+        text: textSpan,
+        textAlign: TextAlign.left,
+        textDirection: TextDirection.ltr,
+        maxLines: 2,
+        ellipsis: '...',
+      )..layout(maxWidth: boxWidth - 24);
+
+      tp.paint(canvas, Offset(boxRect.left + 14, cy - (tp.height / 2)));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CmapFlowchartPainter oldDelegate) => true;
 }

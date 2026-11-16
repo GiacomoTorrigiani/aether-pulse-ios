@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-ipa:
     name: Compile & Package iOS IPA
-    runs-on: macos-latest
+    runs-on: macos-14
 
     steps:
       - name: Checkout Code
@@ -54,25 +54,24 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Telefono AI — Integrazione Broker Cloud, Configurazione API Centralino & Sincronizzazione Mappe (v4.3.0 .IPA)
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v4.3.0' }}
+          name: Telefono AI v5.0.0 — Riascolto Audio Chiamate, Mappa CmapTools Flowchart & Web Callback Ponte Automatico (.IPA)
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.0.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v4.3.0: Broker Cloud & Configurazione API (.ipa)
-            
-            Compiled automatically with GitHub Actions on macOS without requiring a Mac.
-            
-            ### 🌟 Nuove Funzionalità in v4.3.0:
-            1. **🌐 Interfaccia Configurazione Broker & API**: Modale dedicato accessibile dalla barra di stato o dal tab Risparmio per configurare l'endpoint del proprio centralino Asterisk, Telnyx o Twilio.
-            2. **🔑 Parametri di Connessione Completi**: Configurazione guidata per Server URL, API Secret Token (Bearer), Numero Virtuale DID (Inbound) e Caller ID TIM certificato (Outbound).
-            3. **⚡ Test Connessione Ping Live**: Verifica istantanea con feedback visivo della connettività con il server backend VoIP.
-            4. **🔄 Sincronizzazione Automatica Registrazioni Cloud**: Con un solo tap su "Sincronizza Cloud" l'app recupera le registrazioni effettuate dal centralino Asterisk/Telnyx e genera immediatamente trascrizioni, appunti e mappe concettuali interattive.
-            5. **🖥️ Microserver Broker Python Pronto all'Uso**: Disponibile nello script `server/broker_webhook_server.py` per ricevere i webhook di fine chiamata e trascrivere con Whisper / Gemini AI.
+            ## 📱 Telefono AI v5.0.0: Riascolto Audio, Mappa CmapTools & Web Callback
+
+            ### 🌟 Novità di questa versione:
+            1. 🎙️ **Player Audio Integrato**: Riascolta la registrazione integrale della telefonata tra le due persone direttamente nell'app con seek bar, avanzamento in tempo reale e controllo velocità.
+            2. 🗺️ **Mappe Concettuali Stile CmapTools / Flowchart**: Nodi concettuali e archi orientati con etichette di relazione (stile Novak IHMC CmapTools) con pan e pinch-to-zoom.
+            3. 🚀 **Ponte AI Automatico (Web Callback)**: Chiama con un solo tocco senza conferenze manuali: la VPS fa squillare il tuo cellulare (366 9650010) e ti unisce al contatto registrando la conversazione.
+            4. 🧠 **Motore Google Gemini 3.5 Flash**: Trascrizione automatica, estrazione decisioni e promemoria operativi collegati alla tua chiave API.
             
             ### 📲 Installazione su iPhone con Sideloadly:
-            1. Scarica `AetherPulse.ipa` qui sotto.
+            1. Scarica `AetherPulse.ipa` qui sotto dagli Assets.
             2. Aprilo con Sideloadly su Windows con cavo USB.
+            3. Inserisci il tuo Apple ID e premi Start.
+            4. Su iPhone: Impostazioni > Generali > Gestione dispositivo e VPN > Autorizza l'app.
             3. Su iPhone: Impostazioni > Generali > Gestione dispositivo e VPN > Autorizza.
           files: |
             AetherPulse.ipa

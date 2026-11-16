@@ -3,6 +3,9 @@
 *.log
 *.pyc
 *.swp
+*.ppk
+*.key
+*.pem
 .DS_Store
 .atom/
 .build/
