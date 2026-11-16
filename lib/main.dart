@@ -130,9 +130,9 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
   // External Broker / PBX API State
   String _brokerUrl = 'https://gestoreserver.duckdns.org/telefono';
   String _brokerApiKey = 'segreto_telefono_ai_2026';
-  String _brokerDid = '+39021234567';
+  String _brokerDid = '+3907441590208';
   String _brokerCallerId = '+393381234567';
-  String _brokerProvider = 'Asterisk VPS (gestoreserver.duckdns.org)';
+  String _brokerProvider = 'VivaVox / Asterisk (0744 1590208)';
   bool _isBrokerConnected = false;
   bool _isTestingBroker = false;
   bool _isSyncingBroker = false;
@@ -256,9 +256,9 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
     setState(() {
       _brokerUrl = prefs.getString('broker_url') ?? 'https://gestoreserver.duckdns.org/telefono';
       _brokerApiKey = prefs.getString('broker_api_key') ?? 'segreto_telefono_ai_2026';
-      _brokerDid = prefs.getString('broker_did') ?? '+39021234567';
+      _brokerDid = prefs.getString('broker_did') ?? '+3907441590208';
       _brokerCallerId = prefs.getString('broker_caller_id') ?? '+393381234567';
-      _brokerProvider = prefs.getString('broker_provider') ?? 'Asterisk VPS (gestoreserver.duckdns.org)';
+      _brokerProvider = prefs.getString('broker_provider') ?? 'VivaVox / Asterisk (0744 1590208)';
       _isBrokerConnected = prefs.getBool('broker_connected') ?? false;
     });
   }
