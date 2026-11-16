@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/cupertino.dart';
@@ -354,30 +355,31 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
               if (_brokerApiKey.isNotEmpty) 'Authorization': 'Bearer $_brokerApiKey',
               'Accept': 'application/json',
             },
-          ).timeout(const Duration(seconds: 3));
+          ).timeout(const Duration(seconds: 8));
 
           if (resp.statusCode == 200) {
             final data = jsonDecode(resp.body);
-            if (data is List) {
+            if (data is List && data.isNotEmpty) {
+              _reports.clear();
               for (final item in data) {
                 final report = ProcessedCallReport(
                   id: item['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
                   contactName: item['contactName'] ?? 'Chiamata Registrata',
                   phoneNumber: item['phoneNumber'] ?? _brokerDid,
                   dateTime: DateTime.tryParse(item['dateTime'] ?? '') ?? DateTime.now(),
-                  duration: Duration(seconds: item['durationSeconds'] ?? 180),
+                  duration: Duration(seconds: item['durationSeconds'] ?? 60),
                   audioFilePath: item['audioPath'],
                   audioUrl: item['audioUrl'] ?? item['audioPath'],
                   rawTranscript: item['transcript'] ?? 'Trascrizione dal centralino cloud completata.',
                   summary: item['summary'] ?? 'Sintesi generata dal centralino Asterisk / Whisper.',
-                  decisions: List<String>.from(item['decisions'] ?? ['Accordo operativo registrato sul server']),
-                  actionItems: List<String>.from(item['actionItems'] ?? ['Verificare dettagli chiamata']),
+                  decisions: List<String>.from(item['decisions'] ?? []),
+                  actionItems: List<String>.from(item['actionItems'] ?? []),
                   followUpQuestions: ['Confermare dettagli concordati'],
                   mindMapNodes: List<Map<String, dynamic>>.from(item['mindMapNodes'] ?? []),
-                  cmap: item['cmap'] is Map<String, dynamic> ? item['cmap'] : null,
+                  cmap: item['cmap'] is Map<String, dynamic> ? Map<String, dynamic>.from(item['cmap']) : null,
                   isFromExternalBroker: true,
                 );
-                _reports.insert(0, report);
+                _reports.add(report);
               }
               fetchedFromServer = true;
             }
@@ -2637,6 +2639,7 @@ class NotesAndMindMapTab extends StatefulWidget {
 
 class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
   ProcessedCallReport? _selectedReport;
+  bool _showCalendarView = true;
 
   @override
   void initState() {
@@ -2644,6 +2647,38 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
     if (widget.reports.isNotEmpty) {
       _selectedReport = widget.reports.first;
     }
+  }
+
+  Map<String, List<ProcessedCallReport>> _groupReportsByDay(List<ProcessedCallReport> reports) {
+    final Map<String, List<ProcessedCallReport>> grouped = {};
+    for (final rep in reports) {
+      final key = '${rep.dateTime.year}-${rep.dateTime.month.toString().padLeft(2, '0')}-${rep.dateTime.day.toString().padLeft(2, '0')}';
+      grouped.putIfAbsent(key, () => []).add(rep);
+    }
+    return grouped;
+  }
+
+  String _formatDayHeader(DateTime dt) {
+    final now = DateTime.now();
+    final isToday = dt.year == now.year && dt.month == now.month && dt.day == now.day;
+    final yesterday = now.subtract(const Duration(days: 1));
+    final isYesterday = dt.year == yesterday.year && dt.month == yesterday.month && dt.day == yesterday.day;
+
+    const weekdays = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+    const months = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+
+    final dayName = weekdays[dt.weekday - 1];
+    final monthName = months[dt.month - 1];
+
+    if (isToday) return 'Oggi • $dayName ${dt.day} $monthName';
+    if (isYesterday) return 'Ieri • $dayName ${dt.day} $monthName';
+    return '$dayName ${dt.day} $monthName ${dt.year}';
+  }
+
+  String _formatHour(DateTime dt) {
+    final h = dt.hour.toString().padLeft(2, '0');
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   @override
@@ -2656,15 +2691,15 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(CupertinoIcons.doc_text_search, size: 64, color: Colors.white24),
+                const Icon(CupertinoIcons.calendar_today, size: 64, color: Colors.white24),
                 const SizedBox(height: 16),
                 const Text(
-                  'Nessun Appunto Registrato',
+                  'Nessuna Chiamata Registrata',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Effettua una chiamata oppure sincronizza le chiamate registrate dal tuo centralino cloud Asterisk per creare mappe e decisioni.',
+                  'Effettua una chiamata con Web Callback o sincronizza le registrazioni dal tuo centralino cloud Asterisk.',
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 13, color: Colors.white54),
                 ),
@@ -2713,7 +2748,7 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
         children: [
           // Top Bar with Sync Cloud Button
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -2721,16 +2756,15 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
                   children: [
                     const Text('Appunti & Mappe', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
                     const SizedBox(width: 8),
-                    if (activeReport.isFromExternalBroker)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0A84FF).withAlpha(40),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF0A84FF)),
-                        ),
-                        child: const Text('CLOUD PBX', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF0A84FF))),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A84FF).withAlpha(40),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFF0A84FF)),
                       ),
+                      child: const Text('CLOUD PBX', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF0A84FF))),
+                    ),
                   ],
                 ),
                 TextButton.icon(
@@ -2747,14 +2781,369 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
             ),
           ),
 
-          // Selector Carousel if multiple reports
+          // Segmented Switcher: Calendario & Orari vs Mappa & Dettagli
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: Colors.white12),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _showCalendarView = true);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _showCalendarView ? const Color(0xFF0A84FF) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(CupertinoIcons.calendar, size: 14, color: _showCalendarView ? Colors.white : Colors.white54),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Calendario & Orari',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _showCalendarView ? Colors.white : Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _showCalendarView = false);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: !_showCalendarView ? const Color(0xFF0A84FF) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(CupertinoIcons.flowchart_fill, size: 14, color: !_showCalendarView ? Colors.white : Colors.white54),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Mappa & Dettagli',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: !_showCalendarView ? Colors.white : Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Content: Calendar Grouped View or Detail View
+          Expanded(
+            child: _showCalendarView
+                ? _buildCalendarView(widget.reports)
+                : _buildDetailView(activeReport),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- VISTA CALENDARIO & CRONOLOGIA RAGGRUPPATA PER GIORNI E ORE ---
+  Widget _buildCalendarView(List<ProcessedCallReport> reports) {
+    final grouped = _groupReportsByDay(reports);
+    final sortedDays = grouped.keys.toList()..sort((a, b) => b.compareTo(a));
+
+    return ListView.builder(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100, top: 4),
+      itemCount: sortedDays.length,
+      itemBuilder: (ctx, dayIdx) {
+        final dayKey = sortedDays[dayIdx];
+        final dayCalls = grouped[dayKey] ?? [];
+        final firstDate = dayCalls.isNotEmpty ? dayCalls.first.dateTime : DateTime.now();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Intestazione Giorno Calendario
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E222A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF0A84FF).withAlpha(60)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(CupertinoIcons.calendar, size: 14, color: Color(0xFF0A84FF)),
+                      const SizedBox(width: 8),
+                      Text(
+                        _formatDayHeader(firstDate),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0A84FF).withAlpha(40),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${dayCalls.length} ${dayCalls.length == 1 ? "chiamata" : "chiamate"}',
+                      style: const TextStyle(color: Color(0xFF64D2FF), fontSize: 10, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Chiamate del giorno ordinate per orario
+            ...dayCalls.map((call) {
+              final isCurrentSelected = _selectedReport?.id == call.id;
+              final hourStr = _formatHour(call.dateTime);
+              final durStr = '${call.duration.inMinutes > 0 ? "${call.duration.inMinutes}m " : ""}${call.duration.inSeconds.remainder(60)}s';
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1C1C1E),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isCurrentSelected ? const Color(0xFF0A84FF) : const Color(0xFF2C2C2E),
+                    width: isCurrentSelected ? 1.5 : 1.0,
+                  ),
+                  boxShadow: isCurrentSelected
+                      ? [BoxShadow(color: const Color(0xFF0A84FF).withAlpha(40), blurRadius: 10)]
+                      : null,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Riga Superiore: Orario, Durata, Badge
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0A84FF).withAlpha(35),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF0A84FF).withAlpha(120)),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(CupertinoIcons.clock_fill, size: 10, color: Color(0xFF64D2FF)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      hourStr,
+                                      style: const TextStyle(
+                                        color: Color(0xFF64D2FF),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '⏱️ $durStr',
+                                style: const TextStyle(color: Colors.white60, fontSize: 11),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF30D158).withAlpha(30),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Text(
+                              '🎙️ Audio HD (MP3)',
+                              style: TextStyle(color: Color(0xFF30D158), fontSize: 10, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Titolo / Contatto Chiamata
+                      Text(
+                        call.contactName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+
+                      // Sintesi Chiamata
+                      Text(
+                        call.summary,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+
+                      if (call.decisions.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2C2C2E),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(CupertinoIcons.checkmark_seal_fill, size: 12, color: Color(0xFF30D158)),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  call.decisions.first,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(color: Color(0xFF30D158), fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+
+                      // Pulsanti d'Azione: Riascolta & Vedi Mappa
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0A84FF),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () {
+                                HapticFeedback.mediumImpact();
+                                setState(() {
+                                  _selectedReport = call;
+                                  _showCalendarView = false;
+                                });
+                              },
+                              icon: const Icon(CupertinoIcons.play_arrow_solid, size: 14),
+                              label: const Text('Riascolta Audio', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF64D2FF),
+                                side: const BorderSide(color: Color(0xFF64D2FF)),
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                              onPressed: () {
+                                HapticFeedback.selectionClick();
+                                setState(() {
+                                  _selectedReport = call;
+                                  _showCalendarView = false;
+                                });
+                              },
+                              icon: const Icon(CupertinoIcons.flowchart, size: 14),
+                              label: const Text('Mappa & Appunti', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      },
+    );
+  }
+
+  // --- VISTA DETTAGLIO SCHEDA CHIAMATA & MAPPA CONCETTUALE ---
+  Widget _buildDetailView(ProcessedCallReport activeReport) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100, top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Tasto rapido "Torna al Calendario"
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              setState(() => _showCalendarView = true);
+            },
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1C1C1E),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(CupertinoIcons.chevron_left, size: 14, color: Color(0xFF0A84FF)),
+                  SizedBox(width: 6),
+                  Text(
+                    'Torna al Calendario Chiamate',
+                    style: TextStyle(color: Color(0xFF0A84FF), fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Chip Orizzontali Chiamate
           if (widget.reports.length > 1)
             Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              height: 38,
+              margin: const EdgeInsets.only(bottom: 12),
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: widget.reports.length,
                 itemBuilder: (ctx, i) {
                   final rep = widget.reports[i];
@@ -2766,25 +3155,17 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                       decoration: BoxDecoration(
                         color: isSel ? const Color(0xFF0A84FF) : const Color(0xFF1C1C1E),
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(18),
                         border: Border.all(color: isSel ? Colors.transparent : Colors.white12),
                       ),
                       child: Center(
-                        child: Row(
-                          children: [
-                            if (rep.isFromExternalBroker) ...[
-                              const Icon(CupertinoIcons.cloud_fill, size: 10, color: Colors.white70),
-                              const SizedBox(width: 4),
-                            ],
-                            Text(
-                              rep.contactName,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
+                        child: Text(
+                          rep.contactName,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isSel ? FontWeight.bold : FontWeight.normal,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -2793,99 +3174,175 @@ class _NotesAndMindMapTabState extends State<NotesAndMindMapTab> {
               ),
             ),
 
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(left: 20, right: 20, bottom: 100, top: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Header Info
+          Text(
+            activeReport.contactName,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${_formatDayHeader(activeReport.dateTime)} ore ${_formatHour(activeReport.dateTime)} • Durata: ${activeReport.duration.inMinutes > 0 ? "${activeReport.duration.inMinutes}m " : ""}${activeReport.duration.inSeconds.remainder(60)}s',
+            style: const TextStyle(fontSize: 11, color: Colors.white54),
+          ),
+          const SizedBox(height: 12),
+
+          // Audio Player con Cache Locale & AudioContext Playback
+          if (activeReport.audioUrl != null || activeReport.audioFilePath != null) ...[
+            CallAudioPlayerWidget(
+              key: ValueKey(activeReport.id),
+              audioUrl: activeReport.audioUrl ?? activeReport.audioFilePath!,
+              totalDuration: activeReport.duration,
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Mappa Concettuale CmapTools Flowchart
+          _sectionHeader(CupertinoIcons.flowchart_fill, 'MAPPA CONCETTUALE CMAPTOOLS & FLOWCHART'),
+          const SizedBox(height: 8),
+          CmapToolsFlowchartView(
+            cmapData: activeReport.cmap,
+            fallbackNodes: activeReport.mindMapNodes,
+            title: activeReport.contactName,
+          ),
+          const SizedBox(height: 12),
+
+          // Elenco Testuale Relazioni Cmap (per facile lettura)
+          _buildCmapRelationsList(activeReport.cmap),
+          const SizedBox(height: 16),
+
+          // Riassunto Dinamico Reale
+          _sectionHeader(CupertinoIcons.doc_text_fill, 'RIASSUNTO DINAMICO REALE'),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              activeReport.summary,
+              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Decisioni Prese
+          if (activeReport.decisions.isNotEmpty) ...[
+            _sectionHeader(CupertinoIcons.check_mark_circled_solid, 'DECISIONI PRESE'),
+            const SizedBox(height: 8),
+            ...activeReport.decisions.map((d) => _bulletItem(d, const Color(0xFF30D158))),
+            const SizedBox(height: 16),
+          ],
+
+          // Cose da Fare (Action Items)
+          if (activeReport.actionItems.isNotEmpty) ...[
+            _sectionHeader(CupertinoIcons.bell_fill, 'COSE DA FARE (ACTION ITEMS)'),
+            const SizedBox(height: 8),
+            ...activeReport.actionItems.map((a) => _bulletItem(a, const Color(0xFFFF9F0A))),
+            const SizedBox(height: 16),
+          ],
+
+          // Trascrizione Integrale
+          ExpansionTile(
+            title: const Text('Trascrizione Integrale Completa', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+            initiallyExpanded: true,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF161618),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  activeReport.rawTranscript,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12, height: 1.4),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- SCHEDA STRUTTURATA DELLE RELAZIONI CMAP ---
+  Widget _buildCmapRelationsList(Map<String, dynamic>? cmapData) {
+    if (cmapData == null || cmapData['links'] == null || (cmapData['links'] as List).isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final links = List<Map<String, dynamic>>.from(cmapData['links']);
+    final concepts = List<Map<String, dynamic>>.from(cmapData['concepts'] ?? []);
+    final conceptMap = <String, String>{};
+    for (final c in concepts) {
+      conceptMap[c['id'].toString()] = c['label']?.toString() ?? c['id'].toString();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF161618),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(CupertinoIcons.arrow_right_arrow_left, size: 12, color: Color(0xFF64D2FF)),
+              SizedBox(width: 6),
+              Text(
+                'SCHEMA RELAZIONALE CONCETTI (CMAP)',
+                style: TextStyle(color: Color(0xFF64D2FF), fontSize: 10, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...links.map((link) {
+            final fromLabel = conceptMap[link['from'].toString()] ?? link['from'].toString();
+            final toLabel = conceptMap[link['to'].toString()] ?? link['to'].toString();
+            final relation = link['label']?.toString() ?? 'collega';
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
                 children: [
-                  // Header Info
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            activeReport.contactName,
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Durata: ${activeReport.duration.inMinutes}m ${activeReport.duration.inSeconds.remainder(60)}s • ${activeReport.isFromExternalBroker ? "Registrato da Centralino Cloud" : "Registrazione Locale"}',
-                            style: const TextStyle(fontSize: 11, color: Colors.white54),
-                          ),
-                        ],
-                      ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Audio Player per riascolto registrazione reale
-                    if (activeReport.audioUrl != null || activeReport.audioFilePath != null) ...[
-                      CallAudioPlayerWidget(
-                        audioUrl: activeReport.audioUrl ?? activeReport.audioFilePath!,
-                        totalDuration: activeReport.duration,
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-
-                    // Mappa Concettuale Stile CmapTools / Flowchart
-                    _sectionHeader(CupertinoIcons.flowchart_fill, 'MAPPA CONCETTUALE CMAPTOOLS & FLOWCHART'),
-                    const SizedBox(height: 8),
-                    CmapToolsFlowchartView(
-                      cmapData: activeReport.cmap,
-                      fallbackNodes: activeReport.mindMapNodes,
-                      title: activeReport.contactName,
-                    ),
-                    const SizedBox(height: 18),
-
-                  // Summary Card
-                  _sectionHeader(CupertinoIcons.doc_text_fill, 'RIASSUNTO DINAMICO REALE'),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1C1C1E),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                  Expanded(
+                    flex: 4,
                     child: Text(
-                      activeReport.summary,
-                      style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.4),
+                      fromLabel,
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(height: 18),
-
-                  // Decisions Taken
-                  _sectionHeader(CupertinoIcons.check_mark_circled_solid, 'DECISIONI PRESE'),
-                  const SizedBox(height: 8),
-                  ...activeReport.decisions.map((d) => _bulletItem(d, const Color(0xFF30D158))),
-                  const SizedBox(height: 18),
-
-                  // Action Items / Cose da Fare
-                  _sectionHeader(CupertinoIcons.bell_fill, 'COSE DA FARE (ACTION ITEMS)'),
-                  const SizedBox(height: 8),
-                  ...activeReport.actionItems.map((a) => _bulletItem(a, const Color(0xFFFF9F0A))),
-                  const SizedBox(height: 18),
-
-                  // Raw Transcript Accordion
-                  ExpansionTile(
-                    title: const Text('Trascrizione Integrale Completa', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          activeReport.rawTranscript,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
-                        ),
-                      ),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0A84FF).withAlpha(40),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      '➔ $relation ➔',
+                      style: const TextStyle(color: Color(0xFF64D2FF), fontSize: 9, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    flex: 4,
+                    child: Text(
+                      toLabel,
+                      style: const TextStyle(color: Color(0xFF30D158), fontSize: 11, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
-            ),
-          ),
+            );
+          }),
         ],
       ),
     );
@@ -3036,12 +3493,43 @@ class _CallAudioPlayerWidgetState extends State<CallAudioPlayerWidget> {
   Duration _duration = Duration.zero;
   double _playbackSpeed = 1.0;
   bool _isLoading = false;
+  String? _localCachedPath;
 
   @override
   void initState() {
     super.initState();
-    _duration = widget.totalDuration;
+    _duration = widget.totalDuration.inSeconds > 0 ? widget.totalDuration : const Duration(seconds: 60);
+    _configureAudioContext();
     _initAudioListeners();
+  }
+
+  @override
+  void didUpdateWidget(covariant CallAudioPlayerWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.audioUrl != widget.audioUrl) {
+      _player.stop();
+      _localCachedPath = null;
+      setState(() {
+        _playerState = PlayerState.stopped;
+        _position = Duration.zero;
+        _duration = widget.totalDuration.inSeconds > 0 ? widget.totalDuration : const Duration(seconds: 60);
+      });
+    }
+  }
+
+  Future<void> _configureAudioContext() async {
+    try {
+      await AudioPlayer.global.setAudioContext(
+        AudioContext(
+          iOS: AudioContextIOS(
+            category: AVAudioSessionCategory.playback,
+            options: {
+              AVAudioSessionOptions.defaultToSpeaker,
+            },
+          ),
+        ),
+      );
+    } catch (_) {}
   }
 
   void _initAudioListeners() {
@@ -3052,7 +3540,9 @@ class _CallAudioPlayerWidgetState extends State<CallAudioPlayerWidget> {
       if (mounted) setState(() => _position = pos);
     });
     _player.onDurationChanged.listen((dur) {
-      if (mounted) setState(() => _duration = dur);
+      if (mounted && dur.inSeconds > 0) {
+        setState(() => _duration = dur);
+      }
     });
     _player.onPlayerComplete.listen((_) {
       if (mounted) {
@@ -3076,13 +3566,47 @@ class _CallAudioPlayerWidgetState extends State<CallAudioPlayerWidget> {
     } else {
       setState(() => _isLoading = true);
       try {
+        await _configureAudioContext();
+
+        String playSource = widget.audioUrl;
         if (widget.audioUrl.startsWith('http')) {
-          await _player.play(UrlSource(widget.audioUrl));
+          if (_localCachedPath != null && await File(_localCachedPath!).exists() && await File(_localCachedPath!).length() > 0) {
+            playSource = _localCachedPath!;
+          } else {
+            final tempDir = await getTemporaryDirectory();
+            final rawName = widget.audioUrl.split('/').last.split('?').first;
+            final localFile = File('${tempDir.path}/$rawName');
+
+            if (!await localFile.exists() || await localFile.length() == 0) {
+              final resp = await http.get(Uri.parse(widget.audioUrl)).timeout(const Duration(seconds: 15));
+              if (resp.statusCode == 200 && resp.bodyBytes.isNotEmpty) {
+                await localFile.writeAsBytes(resp.bodyBytes);
+              }
+            }
+
+            if (await localFile.exists() && await localFile.length() > 0) {
+              _localCachedPath = localFile.path;
+              playSource = localFile.path;
+            }
+          }
+        }
+
+        if (playSource.startsWith('http')) {
+          await _player.play(UrlSource(playSource));
         } else {
-          await _player.play(DeviceFileSource(widget.audioUrl));
+          await _player.play(DeviceFileSource(playSource));
         }
       } catch (e) {
         debugPrint('Errore playback: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Impossibile riprodurre audio: $e'),
+              backgroundColor: Colors.redAccent,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       } finally {
         if (mounted) setState(() => _isLoading = false);
       }
