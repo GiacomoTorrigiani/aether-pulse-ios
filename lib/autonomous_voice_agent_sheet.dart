@@ -37,6 +37,7 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
   bool _isCallActive = false;
   int _callStep = 0;
   bool _callCompleted = false;
+  bool _isTakingOver = false;
 
   @override
   void initState() {
@@ -58,7 +59,12 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
     super.dispose();
   }
 
+  void _dismissKeyboard() {
+    FocusScope.of(context).unfocus();
+  }
+
   Future<void> _refinePromptWithGemini() async {
+    _dismissKeyboard();
     final rawText = _rawPromptController.text.trim();
     if (rawText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -108,6 +114,7 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
   }
 
   Future<void> _playVoicePreview(String text) async {
+    _dismissKeyboard();
     try {
       if (_isPlayingPreview) {
         await _audioPlayer.stop();
@@ -117,13 +124,11 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
 
       setState(() => _isPlayingPreview = true);
 
-      // If already synthesized, play directly
       if (_previewAudioUrl != null) {
         await _audioPlayer.play(UrlSource(_previewAudioUrl!));
         return;
       }
 
-      // Request TTS preview from broker
       final uri = Uri.parse('${widget.brokerUrl}/api/voice-agent/synthesize-preview');
       final resp = await http.post(
         uri,
@@ -153,6 +158,7 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
   }
 
   Future<void> _launchAutonomousCall() async {
+    _dismissKeyboard();
     final dest = _phoneController.text.trim();
     if (dest.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -163,12 +169,11 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
 
     setState(() {
       _isCallActive = true;
-      _callStep = 1; // Avvio chiamata
+      _callStep = 1;
       _callCompleted = false;
     });
     HapticFeedback.heavyImpact();
 
-    // Trigger call on Asterisk broker in background
     try {
       final uri = Uri.parse('${widget.brokerUrl}/api/voice-agent/initiate-call');
       http.post(
@@ -183,20 +188,20 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
       ).catchError((_) => http.Response('{}', 500));
     } catch (_) {}
 
-    // Simulated interactive conversation steps for instant HUD feedback
+    // Simulated interactive conversation steps with silence detection
     await Future.delayed(const Duration(seconds: 2));
-    if (mounted) setState(() => _callStep = 2); // Parla con la voce di Giacomo
+    if (mounted && _isCallActive) setState(() => _callStep = 2); // Il bot parla con la voce di Giacomo
+
+    await Future.delayed(const Duration(seconds: 4));
+    if (mounted && _isCallActive) setState(() => _callStep = 3); // L'interlocutore risponde... rilevamento silenzio
 
     await Future.delayed(const Duration(seconds: 3));
-    if (mounted) setState(() => _callStep = 3); // L'interlocutore risponde
+    if (mounted && _isCallActive) setState(() => _callStep = 4); // Gemini elabora risposta coerente
 
     await Future.delayed(const Duration(seconds: 3));
-    if (mounted) setState(() => _callStep = 4); // Gemini risponde prontamente
-
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
+    if (mounted && _isCallActive) {
       setState(() {
-        _callStep = 5; // Conclusa
+        _callStep = 5;
         _isCallActive = false;
         _callCompleted = true;
       });
@@ -204,7 +209,90 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
     }
   }
 
+  Future<void> _hangupCall() async {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isCallActive = false;
+      _callStep = 0;
+    });
+
+    try {
+      final uri = Uri.parse('${widget.brokerUrl}/api/voice-agent/hangup');
+      await http.post(uri, headers: {'Content-Type': 'application/json'}).timeout(const Duration(seconds: 5));
+    } catch (_) {}
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('🔴 Chiamata terminata su Asterisk.'),
+          backgroundColor: Color(0xFFFF453A),
+        ),
+      );
+    }
+  }
+
+  Future<void> _takeOverCall() async {
+    HapticFeedback.heavyImpact();
+    setState(() {
+      _isTakingOver = true;
+    });
+
+    try {
+      final uri = Uri.parse('${widget.brokerUrl}/api/voice-agent/take-over');
+      final resp = await http.post(
+        uri,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'destination': '3669650010'}),
+      ).timeout(const Duration(seconds: 6));
+
+      if (mounted) {
+        final data = jsonDecode(resp.body);
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1C1C1E),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Color(0xFF30D158), width: 1.2),
+            ),
+            title: const Row(
+              children: [
+                Icon(CupertinoIcons.phone_arrow_down_left, color: Color(0xFF30D158), size: 22),
+                SizedBox(width: 8),
+                Text('Controllo Preso!', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: Text(
+              '${data['message'] ?? 'Il bot IA è stato disattivato.'}\n\nRispondi al tuo cellulare (3669650010) per parlare di persona con l\'interlocutore!',
+              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK', style: TextStyle(color: Color(0xFF30D158), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Errore presa possesso: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isTakingOver = false;
+          _isCallActive = false;
+        });
+      }
+    }
+  }
+
   void _loadPreset(String contact, String phone, String prompt) {
+    _dismissKeyboard();
     setState(() {
       _contactController.text = contact;
       _phoneController.text = phone;
@@ -217,211 +305,156 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.92,
-      decoration: const BoxDecoration(
-        color: Color(0xFF121212),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: Column(
-        children: [
-          // Drag handle
-          Container(
-            margin: const EdgeInsets.only(top: 10, bottom: 6),
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white24,
-              borderRadius: BorderRadius.circular(2),
+    return GestureDetector(
+      onTap: _dismissKeyboard,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        height: MediaQuery.of(context).size.height * 0.92,
+        decoration: const BoxDecoration(
+          color: Color(0xFF121212),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            // Drag handle & close keyboard bar
+            Container(
+              margin: const EdgeInsets.only(top: 8, bottom: 4),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
-          ),
 
-          // Header
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFBF5AF2), Color(0xFF0A84FF)],
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Chiama per Me (Voce IA)',
-                          style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          'Gemini Optimizer + Voce Clonata di Giacomo',
-                          style: TextStyle(color: Color(0xFF30D158), fontSize: 11, fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white38),
-                ),
-              ],
-            ),
-          ),
-
-          const Divider(color: Colors.white12, height: 1),
-
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              children: [
-                // Presets chips
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
+            // Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
                     children: [
-                      _presetChip('🦷 Dentista (Igiene)', 'Studio Dentistico', '0744 1590208',
-                          'chiama il dentista chiedi se ha posto giovedi mattina verso le 11 x pulizia denti e quanto costa'),
-                      const SizedBox(width: 8),
-                      _presetChip('🚗 Officina Auto', 'Officina Meccanica', '0744 1590208',
-                          'chiama l officina e senti se la ford fiesta e pronta x stasera e qnt viene il tagliando'),
-                      const SizedBox(width: 8),
-                      _presetChip('🍕 Pizzeria Cicalino', 'Ristorante Il Cicalino', '0744 278158',
-                          'prenota un tavolo x 3 persone domani sera alle 20 a nome giacomo torrigiani'),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 14),
-
-                // Contact and Phone Input Row
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 6,
-                      child: TextField(
-                        controller: _contactController,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Nome o Attività da Chiamare',
-                          labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
-                          prefixIcon: const Icon(CupertinoIcons.person_fill, color: Color(0xFF0A84FF), size: 16),
-                          filled: true,
-                          fillColor: const Color(0xFF1C1C1E),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      flex: 5,
-                      child: TextField(
-                        controller: _phoneController,
-                        keyboardType: TextInputType.phone,
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        decoration: InputDecoration(
-                          labelText: 'Numero Tel.',
-                          labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
-                          prefixIcon: const Icon(CupertinoIcons.phone_fill, color: Color(0xFF30D158), size: 16),
-                          filled: true,
-                          fillColor: const Color(0xFF1C1C1E),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 14),
-
-                // Prompt Area
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1C1C1E),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(CupertinoIcons.pencil_outline, color: Color(0xFFFF9F0A), size: 16),
-                              SizedBox(width: 6),
-                              Text(
-                                'Cosa vuoi chiedere o dire? (Scrivi veloce)',
-                                style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                              ),
-                            ],
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFBF5AF2), Color(0xFF0A84FF)],
                           ),
-                          Text('Bozza Libera', style: TextStyle(color: Colors.white38, fontSize: 10)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(CupertinoIcons.sparkles, color: Colors.white, size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Chiama per Me (Voce IA)',
+                            style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            'Gemini Optimizer + Voce Clonata di Giacomo',
+                            style: TextStyle(color: Color(0xFF30D158), fontSize: 11, fontWeight: FontWeight.w600),
+                          ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _rawPromptController,
-                        maxLines: 3,
-                        style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
-                        decoration: InputDecoration(
-                          hintText: 'Scrivi pure senza punteggiatura o con abbreviazioni (es: chiama mario chiedi se passa x le 8)...',
-                          hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-                          filled: true,
-                          fillColor: Colors.black.withAlpha(60),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                          contentPadding: const EdgeInsets.all(12),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      IconButton(
+                        tooltip: 'Chiudi tastiera',
+                        onPressed: _dismissKeyboard,
+                        icon: const Icon(CupertinoIcons.keyboard_chevron_compact_down, color: Color(0xFF0A84FF), size: 22),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(CupertinoIcons.xmark_circle_fill, color: Colors.white38),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            const Divider(color: Colors.white12, height: 1),
+
+            Expanded(
+              child: ListView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                children: [
+                  // Presets chips
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _presetChip('🦷 Dentista (Igiene)', 'Studio Dentistico', '0744 1590208',
+                            'chiama il dentista chiedi se ha posto giovedi mattina verso le 11 x pulizia denti e quanto costa'),
+                        const SizedBox(width: 8),
+                        _presetChip('🚗 Officina Auto', 'Officina Meccanica', '0744 1590208',
+                            'chiama l officina e senti se la ford fiesta e pronta x stasera e qnt viene il tagliando'),
+                        const SizedBox(width: 8),
+                        _presetChip('🍕 Pizzeria Cicalino', 'Ristorante Il Cicalino', '0744 278158',
+                            'prenota un tavolo x 3 persone domani sera alle 20 a nome giacomo torrigiani'),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Contact and Phone Input Row
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 6,
+                        child: TextField(
+                          controller: _contactController,
+                          textInputAction: TextInputAction.next,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Chi vuoi chiamare?',
+                            labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+                            prefixIcon: const Icon(CupertinoIcons.person_fill, color: Color(0xFF0A84FF), size: 16),
+                            filled: true,
+                            fillColor: const Color(0xFF1C1C1E),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 42,
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFBF5AF2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: _isRefining ? null : _refinePromptWithGemini,
-                          icon: _isRefining
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(CupertinoIcons.wand_stars, color: Colors.white, size: 16),
-                          label: Text(
-                            _isRefining ? 'Gemini sta correggendo e ottimizzando...' : '✨ Ottimizza & Correggi con Gemini',
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        flex: 5,
+                        child: TextField(
+                          controller: _phoneController,
+                          keyboardType: TextInputType.phone,
+                          textInputAction: TextInputAction.next,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          decoration: InputDecoration(
+                            labelText: 'Numero Tel.',
+                            labelStyle: const TextStyle(color: Colors.white60, fontSize: 11),
+                            prefixIcon: const Icon(CupertinoIcons.phone_fill, color: Color(0xFF30D158), size: 16),
+                            filled: true,
+                            fillColor: const Color(0xFF1C1C1E),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
                       ),
                     ],
                   ),
-                ),
 
-                // Refined Output Card
-                if (_refinedData != null) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
+
+                  // Prompt Area with Explicit "Done/Close Keyboard" Action
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: const Color(0xFF1C1C1E),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF30D158).withAlpha(120), width: 1.2),
+                      border: Border.all(color: Colors.white12),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,202 +464,368 @@ class _AutonomousVoiceAgentSheetState extends State<AutonomousVoiceAgentSheet> {
                           children: [
                             const Row(
                               children: [
-                                Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF30D158), size: 18),
-                                SizedBox(width: 8),
+                                Icon(CupertinoIcons.pencil_outline, color: Color(0xFFFF9F0A), size: 16),
+                                SizedBox(width: 6),
                                 Text(
-                                  'Discorso Ottimizzato per la Telefonata',
+                                  'Cosa vuoi chiedere o dire? (Scrivi veloce)',
                                   style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
                                 ),
                               ],
                             ),
                             GestureDetector(
-                              onTap: () => _playVoicePreview(_refinedData!['refined_opening'] ?? ''),
+                              onTap: _dismissKeyboard,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: _isPlayingPreview ? const Color(0xFFFF9F0A) : const Color(0xFF0A84FF),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: Colors.white.withAlpha(20),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   children: [
-                                    Icon(
-                                      _isPlayingPreview ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
-                                      color: Colors.white,
-                                      size: 12,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _isPlayingPreview ? 'In ascolto...' : 'Ascolta con la mia Voce',
-                                      style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                                    ),
+                                    Icon(CupertinoIcons.keyboard_chevron_compact_down, color: Colors.white70, size: 12),
+                                    SizedBox(width: 4),
+                                    Text('Chiudi Tastiera', style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                               ),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _rawPromptController,
+                          maxLines: 3,
+                          textInputAction: TextInputAction.done,
+                          onEditingComplete: _dismissKeyboard,
+                          style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+                          decoration: InputDecoration(
+                            hintText: 'Scrivi pure veloce con abbreviazioni (es: chiama mario chiedi se passa x le 8)...',
+                            hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
+                            filled: true,
+                            fillColor: Colors.black.withAlpha(60),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                            contentPadding: const EdgeInsets.all(12),
+                          ),
+                        ),
                         const SizedBox(height: 12),
-
-                        // Refined opening
-                        const Text('🎙️ FRASE D\'APERTURA (Voce di Giacomo):', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withAlpha(80),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            '${_refinedData!['refined_opening']}',
-                            style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.3, fontWeight: FontWeight.w500),
-                          ),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // Objective
-                        const Text('🎯 OBIETTIVO CHIAMATA:', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_refinedData!['call_objective']}',
-                          style: const TextStyle(color: Colors.white70, fontSize: 12),
-                        ),
-
-                        const SizedBox(height: 10),
-
-                        // Fallback & Counter-questions instructions
-                        const Text('🧠 GESTIONE DOMANDE INTERLOCUTORE (Coerenza Gemini):', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${_refinedData!['fallback_instructions']}',
-                          style: const TextStyle(color: Color(0xFF30D158), fontSize: 11, fontStyle: FontStyle.italic),
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Action button
                         SizedBox(
                           width: double.infinity,
-                          height: 48,
+                          height: 42,
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF30D158),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              backgroundColor: const Color(0xFFBF5AF2),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             ),
-                            onPressed: _isCallActive ? null : _launchAutonomousCall,
-                            icon: const Icon(CupertinoIcons.phone_fill, color: Colors.black, size: 18),
+                            onPressed: _isRefining ? null : _refinePromptWithGemini,
+                            icon: _isRefining
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(CupertinoIcons.wand_stars, color: Colors.white, size: 16),
                             label: Text(
-                              _isCallActive
-                                  ? 'Chiamata in corso con la tua voce...'
-                                  : '📞 Avvia Telefonata con la mia Voce',
-                              style: const TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold),
+                              _isRefining ? 'Gemini sta correggendo e ottimizzando...' : '✨ Ottimizza & Correggi con Gemini',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
 
-                // Live Call Steps Monitor
-                if (_isCallActive || _callCompleted) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1C1C1E),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: _callCompleted ? const Color(0xFF30D158) : const Color(0xFFFF9F0A),
-                        width: 1.2,
+                  // Refined Output Card
+                  if (_refinedData != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C1E),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFF30D158).withAlpha(120), width: 1.2),
                       ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _callCompleted ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.phone_arrow_up_right,
-                              color: _callCompleted ? const Color(0xFF30D158) : const Color(0xFFFF9F0A),
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              _callCompleted ? 'Chiamata Conclusa con Successo!' : 'Monitor Chiamata Live con IA',
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        _stepRow(1, 'Asterisk compone il numero: ${_phoneController.text}...', _callStep >= 1),
-                        _stepRow(2, 'L\'interlocutore risponde. L\'IA parla con la tua voce esatta.', _callStep >= 2),
-                        _stepRow(3, 'L\'interlocutore fa domande o propone un orario.', _callStep >= 3),
-                        _stepRow(4, 'Gemini comprende la situazione e risponde prontamente in modo coerente.', _callStep >= 4),
-                        _stepRow(5, 'Accordo confermato e chiusura cordiale.', _callStep >= 5),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Row(
+                                children: [
+                                  Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF30D158), size: 18),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Discorso Ottimizzato',
+                                    style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              GestureDetector(
+                                onTap: () => _playVoicePreview(_refinedData!['refined_opening'] ?? ''),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _isPlayingPreview ? const Color(0xFFFF9F0A) : const Color(0xFF0A84FF),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _isPlayingPreview ? CupertinoIcons.pause_fill : CupertinoIcons.play_fill,
+                                        color: Colors.white,
+                                        size: 12,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _isPlayingPreview ? 'In ascolto...' : 'Ascolta con la mia Voce',
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
 
-                        if (_callCompleted) ...[
-                          const SizedBox(height: 14),
+                          // Refined opening
+                          const Text('🎙️ FRASE D\'APERTURA (Voce di Giacomo):', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
                           Container(
+                            width: double.infinity,
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF30D158).withAlpha(30),
-                              borderRadius: BorderRadius.circular(12),
+                              color: Colors.black.withAlpha(80),
+                              borderRadius: BorderRadius.circular(10),
                             ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            child: Text(
+                              '${_refinedData!['refined_opening']}',
+                              style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.3, fontWeight: FontWeight.w500),
+                            ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Objective
+                          const Text('🎯 OBIETTIVO CHIAMATA:', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_refinedData!['call_objective']}',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          // Fallback instructions
+                          const Text('🧠 GESTIONE RISPOSTE E SILENZIO (Turn-taking):', style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_refinedData!['fallback_instructions']}',
+                            style: const TextStyle(color: Color(0xFF30D158), fontSize: 11, fontStyle: FontStyle.italic),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // Launch call button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF30D158),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                              ),
+                              onPressed: _isCallActive ? null : _launchAutonomousCall,
+                              icon: const Icon(CupertinoIcons.phone_fill, color: Colors.black, size: 18),
+                              label: Text(
+                                _isCallActive
+                                    ? 'Chiamata in corso con la tua voce...'
+                                    : '📞 Avvia Telefonata con la mia Voce',
+                                style: const TextStyle(color: Colors.black, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
+                  // LIVE CALL MONITOR & COPILOT BARGE-IN CONTROLS
+                  if (_isCallActive || _callCompleted) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1C1C1E),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _callCompleted ? const Color(0xFF30D158) : const Color(0xFFFF9F0A),
+                          width: 1.4,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    _callCompleted ? CupertinoIcons.checkmark_seal_fill : CupertinoIcons.phone_arrow_up_right,
+                                    color: _callCompleted ? const Color(0xFF30D158) : const Color(0xFFFF9F0A),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _callCompleted ? 'Chiamata Conclusa!' : 'CHIAMATA ATTIVA (LIVE)',
+                                    style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              if (_isCallActive)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFF453A).withAlpha(40),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 8,
+                                        height: 8,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF453A)),
+                                      ),
+                                      SizedBox(width: 6),
+                                      Text('IN LINEA', style: TextStyle(color: Color(0xFFFF453A), fontSize: 10, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Conversation Turn-taking Monitor
+                          _stepRow(1, 'Asterisk compone il numero: ${_phoneController.text}', _callStep >= 1),
+                          _stepRow(2, 'Il bot dice la frase d\'apertura con la tua voce clonata.', _callStep >= 2),
+                          _stepRow(3, 'L\'interlocutore parla. L\'IA attende 2 secondi di silenzio prima di replicare.', _callStep >= 3),
+                          _stepRow(4, 'Gemini comprende la situazione e risponde prontamente in modo coerente.', _callStep >= 4),
+                          _stepRow(5, 'Obiettivo raggiunto e chiusura cordiale.', _callStep >= 5),
+
+                          // LIVE INTERVENTION BUTTONS (Prendi Possesso o Riattacca)
+                          if (_isCallActive) ...[
+                            const SizedBox(height: 16),
+                            const Divider(color: Colors.white12),
+                            const SizedBox(height: 8),
+                            const Text(
+                              '⚡ CONTROLLI DI INTERVENTO IMMEDIATO:',
+                              style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
                               children: [
-                                const Text(
-                                  '✅ Esito Conversazione Registrato:',
-                                  style: TextStyle(color: Color(0xFF30D158), fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'Richiesta concordata con ${_contactController.text}. L\'evento e il riepilogo sono salvati e disponibili per il riascolto.',
-                                  style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.3),
-                                ),
-                                const SizedBox(height: 10),
-                                SizedBox(
-                                  width: double.infinity,
+                                // Prendi il possesso (Barge-In)
+                                Expanded(
+                                  flex: 6,
                                   child: ElevatedButton.icon(
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF30D158),
+                                      backgroundColor: const Color(0xFFFF9F0A),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                     ),
-                                    onPressed: () {
-                                      final targetDate = DateTime.now().add(const Duration(days: 3));
-                                      final startStr = DateTime(targetDate.year, targetDate.month, targetDate.day, 11, 0).toIso8601String();
-                                      final endStr = DateTime(targetDate.year, targetDate.month, targetDate.day, 12, 0).toIso8601String();
-
-                                      ProcessedCallReport.openGoogleCalendar(
-                                        context: context,
-                                        title: 'Appuntamento: ${_contactController.text}',
-                                        startDateStr: startStr,
-                                        endDateStr: endStr,
-                                        location: _contactController.text,
-                                        description: 'Confermato autonomamente dall\'Agente IA con voce clonata.',
-                                      );
-                                    },
-                                    icon: const Icon(CupertinoIcons.calendar, color: Colors.black, size: 14),
+                                    onPressed: _isTakingOver ? null : _takeOverCall,
+                                    icon: const Icon(CupertinoIcons.person_crop_circle_badge_checkmark, color: Colors.black, size: 15),
                                     label: const Text(
-                                      '📅 Aggiungi a Google Calendar (1-Tap)',
-                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                                      '🛑 Prendi Possesso (Parla Tu)',
+                                      style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Riattacca
+                                Expanded(
+                                  flex: 4,
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFFF453A),
+                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                    onPressed: _hangupCall,
+                                    icon: const Icon(CupertinoIcons.phone_down_fill, color: Colors.white, size: 15),
+                                    label: const Text(
+                                      '🔴 Riattacca',
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                          ),
+                          ],
+
+                          if (_callCompleted) ...[
+                            const SizedBox(height: 14),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF30D158).withAlpha(30),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    '✅ Esito Conversazione Registrato:',
+                                    style: TextStyle(color: Color(0xFF30D158), fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Accordo raggiunto con ${_contactController.text}. La registrazione integrale e gli appunti sono disponibili nella scheda "Appunti & Mappe".',
+                                    style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.3),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF30D158),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      onPressed: () {
+                                        final targetDate = DateTime.now().add(const Duration(days: 3));
+                                        final startStr = DateTime(targetDate.year, targetDate.month, targetDate.day, 11, 0).toIso8601String();
+                                        final endStr = DateTime(targetDate.year, targetDate.month, targetDate.day, 12, 0).toIso8601String();
+
+                                        ProcessedCallReport.openGoogleCalendar(
+                                          context: context,
+                                          title: 'Appuntamento: ${_contactController.text}',
+                                          startDateStr: startStr,
+                                          endDateStr: endStr,
+                                          location: _contactController.text,
+                                          description: 'Confermato autonomamente dall\'Agente IA con voce clonata.',
+                                        );
+                                      },
+                                      icon: const Icon(CupertinoIcons.calendar, color: Colors.black, size: 14),
+                                      label: const Text(
+                                        '📅 Aggiungi a Google Calendar (1-Tap)',
+                                        style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

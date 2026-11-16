@@ -53,28 +53,25 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Telefono AI v5.4.0 — Chiama per Me: Ottimizzatore Bozza Gemini & Agente Telefonico con Voce Clonata (.IPA)"
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.4.0' }}
+          name: "Telefono AI v5.5.0 — Controllo Chiamata Live, Prendi Possesso (Barge-In) & Rilevamento Silenzio (.IPA)"
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'v5.5.0' }}
           draft: false
           prerelease: false
           body: |
-            ## 📱 Telefono AI v5.4.0: Chiama per Me con Voce IA & Ottimizzatore Bozza Gemini
+            ## 📱 Telefono AI v5.5.0: Turn-Taking con Silenzio, Prendi Possesso & Chiusura Tastiera
 
             ### 🌟 Novità assolute in questa versione:
-            1. ✍️ **Area di Testo Libero ("Scrivi Veloce")**:
-               - Scrivi qualsiasi richiesta o obiettivo in modo veloce, anche con abbreviazioni, errori o senza punteggiatura (es. *"chiama il dentista chiedi se ha posto giovedi mattina verso le 11 x pulizia denti e quanto costa"*).
-            2. ✨ **Ottimizzazione & Correzione Istantanea con Gemini**:
-               - Il modello Gemini analizza la bozza ed elabora all'istante:
-                 - **Frase di Apertura Naturale**: Cosa dirà l'assistente con la tua voce non appena l'altra persona risponde.
-                 - **Obiettivo della Telefonata**: Cosa ottenere e chiarire.
-                 - **Punti Chiave & Istruzioni di Fallback**: Come rispondere prontamente e in modo del tutto coerente se l'interlocutore fa domande, propone orari alternativi o chiede chiarimenti.
-            3. 🎙️ **Ascolta con la tua Voce Clonata (ElevenLabs)**:
-               - Tasto rapido per ascoltare in anteprima l'audio sintetizzato prima di avviare la chiamata.
-            4. 📞 **Chiamata Autonoma & Monitor Live**:
-               - Avvio della telefonata tramite Asterisk con la voce clonata di Giacomo (`xEzOS5e97wrbq2qesDb4`).
-               - Monitoraggio passo-passo della conversazione e salvataggio esiti.
-            5. 📅 **Sync Google Calendar (1-Tap)**:
-               - Pulsante a fine chiamata per registrare l'appuntamento concordato direttamente sul tuo calendario!
+            1. ⌨️ **Fix Completo Tastiera**:
+               - Risolto il problema della tastiera bloccata a schermo: tocco ovunque sullo sfondo o swipe per chiuderla istantaneamente.
+               - Nuovo pulsante dedicato **"Chiudi Tastiera"** per modificare e rivedere il testo in ogni momento.
+            2. 🤫 **Turn-Taking Naturale con Rilevamento Silenzio (2 Secondi)**:
+               - Il bot parla con la tua voce clonata, poi si ferma e attende che l'interlocutore risponda.
+               - Non appena l'altra persona termina di parlare (dopo 2 secondi di silenzio), Gemini elabora la risposta coerente e riprende la conversazione!
+            3. 🛑 **Pulsante "Prendi Possesso (Parla Tu)"**:
+               - Se vuoi intervenire di persona nella telefonata, premi il pulsante e Asterisk chiama all'istante il tuo cellulare (3669650010), zittisce il bot IA e ti collega direttamente all'interlocutore!
+            4. 🔴 **Pulsante "Riattacca" Istantaneo**:
+               - Termina immediatamente la telefonata su Asterisk in qualsiasi momento con un solo tocco.
+            5. ✨ **Ottimizzatore Bozza Gemini & Voce Clonata ElevenLabs (Giacomo)**.
             
             ### 📲 Installazione su iPhone con Sideloadly:
             1. Scarica `AetherPulse.ipa` qui sotto dagli Assets della release.
