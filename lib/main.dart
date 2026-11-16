@@ -13,6 +13,7 @@ import 'package:record/record.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
+import 'dinner_voice_agent_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1279,6 +1280,18 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
     }
   }
 
+  void _openDinnerVoiceAgentSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DinnerVoiceAgentModal(
+        brokerUrl: _brokerUrl,
+        onCallPhone: (phoneNumber, name) => _initiatePhoneCall(phoneNumber, name),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1302,6 +1315,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
                 },
                 isBrokerConnected: _isBrokerConnected,
                 onOpenBrokerSettings: _openBrokerSettingsSheet,
+                onOpenVoiceAgent: _openDinnerVoiceAgentSheet,
               ),
 
               // Tab 1: Rubrica Reale iPhone
@@ -1439,6 +1453,7 @@ class KeypadTab extends StatefulWidget {
   final Function(String) onToggleExclusion;
   final bool isBrokerConnected;
   final VoidCallback onOpenBrokerSettings;
+  final VoidCallback onOpenVoiceAgent;
 
   const KeypadTab({
     super.key,
@@ -1448,6 +1463,7 @@ class KeypadTab extends StatefulWidget {
     required this.onToggleExclusion,
     required this.isBrokerConnected,
     required this.onOpenBrokerSettings,
+    required this.onOpenVoiceAgent,
   });
 
   @override
@@ -1477,12 +1493,46 @@ class _KeypadTabState extends State<KeypadTab> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Top Broker Status Pill
+          // Top Bar: Organizza Cena Button + Broker Status Pill
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                GestureDetector(
+                  onTap: widget.onOpenVoiceAgent,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFBF5AF2), Color(0xFF5E5CE6)],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFBF5AF2).withAlpha(80),
+                          blurRadius: 4,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.sparkles, size: 12, color: Colors.white),
+                        SizedBox(width: 5),
+                        Text(
+                          'Organizza Cena (Voce IA)',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 GestureDetector(
                   onTap: widget.onOpenBrokerSettings,
                   child: Container(
