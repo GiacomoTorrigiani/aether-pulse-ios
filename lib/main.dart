@@ -1287,6 +1287,7 @@ class _PhoneMainScreenState extends State<PhoneMainScreen> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => AutonomousVoiceAgentSheet(
         brokerUrl: _brokerUrl,
+        myMobile: _brokerCallerId,
         onCallPhone: (phoneNumber, name) => _initiatePhoneCall(phoneNumber, name),
       ),
     );
